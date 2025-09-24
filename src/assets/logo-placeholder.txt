@@ -1,0 +1,10 @@
+# Logo Placeholder
+
+To add a logo to the reports:
+
+1. Replace this file with your actual logo image (logo.png)
+2. Supported formats: PNG, JPG, JPEG
+3. Recommended size: 150x150 pixels or similar
+4. The logo will appear in the top-left corner of all PDF reports
+
+If no logo is provided, the system will display "The Children's World" as text instead.
