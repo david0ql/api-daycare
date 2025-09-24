@@ -323,4 +323,46 @@ export class DocumentsController {
   ) {
     return this.documentsService.deleteDocumentFile(+id, currentUser.id);
   }
+
+  @Get(':id/file-url')
+  @ApiOperation({ summary: 'Get authenticated file URLs for a document' })
+  @ApiResponse({
+    status: 200,
+    description: 'File URLs retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'URL to view the file inline',
+          example: '/static/files/documents/550e8400-e29b-41d4-a716-446655440000.pdf'
+        },
+        downloadUrl: {
+          type: 'string',
+          description: 'URL to download the file',
+          example: '/static/files/documents/550e8400-e29b-41d4-a716-446655440000.pdf/download'
+        },
+        filename: {
+          type: 'string',
+          description: 'Original filename',
+          example: 'document.pdf'
+        },
+        mimeType: {
+          type: 'string',
+          description: 'MIME type of the file',
+          example: 'application/pdf'
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Document not found or access denied',
+  })
+  getDocumentFileUrl(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: UsersEntity,
+  ) {
+    return this.documentsService.getDocumentFileUrl(+id, currentUser.id, currentUser.role.name);
+  }
 }

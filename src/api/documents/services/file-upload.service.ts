@@ -2,7 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { Express } from 'express';
 import { join } from 'path';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import moment from 'moment';
 
 @Injectable()
@@ -33,7 +33,7 @@ export class FileUploadService {
     try {
       // Generate unique filename
       const fileExtension = this.getFileExtension(file.originalname);
-      const uniqueFilename = `${uuidv4()}${fileExtension}`;
+      const uniqueFilename = `${randomUUID()}${fileExtension}`;
       const filePath = join(this.uploadPath, uniqueFilename);
 
       // Save file to disk

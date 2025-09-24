@@ -22,7 +22,7 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { UsersEntity } from 'src/entities/users.entity';
 
 @ApiTags('Authentication')
-@Controller('api/auth')
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

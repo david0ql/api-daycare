@@ -34,7 +34,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UsersEntity } from 'src/entities/users.entity';
 
 @ApiTags('Attendance')
-@Controller('api/attendance')
+@Controller('attendance')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class AttendanceController {

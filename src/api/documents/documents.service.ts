@@ -466,4 +466,36 @@ export class DocumentsService {
     // Delete document record from database
     await this.documentsRepository.remove(document);
   }
+
+  async getDocumentFileUrl(id: number, currentUserId: number, currentUserRole: string): Promise<{
+    url: string;
+    downloadUrl: string;
+    filename: string;
+    mimeType: string;
+  }> {
+    const queryBuilder = this.documentsRepository
+      .createQueryBuilder('document')
+      .leftJoinAndSelect('document.child', 'child')
+      .where('document.id = :id', { id });
+
+    // If user is parent, only allow access to documents for their children
+    if (currentUserRole === 'parent') {
+      queryBuilder
+        .leftJoin('child.parentChildRelationships', 'pcr')
+        .andWhere('pcr.parentId = :userId', { userId: currentUserId });
+    }
+
+    const document = await queryBuilder.getOne();
+
+    if (!document) {
+      throw new NotFoundException('Document not found or access denied');
+    }
+
+    return {
+      url: `/static/files/documents/${document.filename}`,
+      downloadUrl: `/static/files/documents/${document.filename}/download`,
+      filename: document.originalFilename,
+      mimeType: document.mimeType,
+    };
+  }
 }
