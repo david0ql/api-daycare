@@ -30,7 +30,7 @@ const customTableLayouts: Record<string, CustomTableLayout> = {
             return i === 0 ? 0 : 8;
         },
         paddingRight: function (i, node) {
-            return i === node.table.widths.length - 1 ? 0 : 8;
+            return i === (node.table.widths?.length || 0) - 1 ? 0 : 8;
         },
         fillColor: function (i, node) {
             if (i === 0) {

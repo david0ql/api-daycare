@@ -17,7 +17,7 @@ export class AuthResponseDto {
       firstName: { type: 'string', example: 'John' },
       lastName: { type: 'string', example: 'Doe' },
       phone: { type: 'string', example: '+1234567890' },
-      role: { $ref: '#/components/schemas/UserRolesEntity' },
+      role: { type: 'object', additionalProperties: true },
     },
   })
   user: {

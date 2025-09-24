@@ -58,7 +58,7 @@ export class AuthService {
 
     // Generate JWT token
     const payload = { 
-      sub: savedUser.id, 
+      id: savedUser.id, 
       email: savedUser.email, 
       role: userRole.name 
     };
@@ -70,6 +70,10 @@ export class AuthService {
       relations: ['role'],
     });
 
+    if (!userWithRole) {
+      throw new Error('User not found after creation');
+    }
+
     return {
       accessToken,
       user: {
@@ -77,7 +81,7 @@ export class AuthService {
         email: userWithRole.email,
         firstName: userWithRole.firstName,
         lastName: userWithRole.lastName,
-        phone: userWithRole.phone,
+        phone: userWithRole.phone || undefined,
         role: userWithRole.role,
       },
     };
@@ -114,7 +118,7 @@ export class AuthService {
 
     // Generate JWT token
     const payload = { 
-      sub: user.id, 
+      id: user.id, 
       email: user.email, 
       role: user.role.name 
     };
@@ -127,29 +131,10 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        phone: user.phone,
+        phone: user.phone || undefined,
         role: user.role,
       },
     };
   }
 
-  async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.usersRepository.findOne({
-      where: { email },
-      relations: ['role'],
-    });
-
-    if (user && await bcrypt.compare(password, user.passwordHash)) {
-      const { passwordHash, ...result } = user;
-      return result;
-    }
-    return null;
-  }
-
-  async findUserById(id: number): Promise<UsersEntity> {
-    return this.usersRepository.findOne({
-      where: { id },
-      relations: ['role'],
-    });
-  }
 }

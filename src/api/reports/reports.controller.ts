@@ -14,8 +14,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Response } from 'express';
-import * as moment from 'moment';
+import type { Response } from 'express';
+import moment from 'moment';
 import { ReportsService } from './reports.service';
 import { AttendanceReportDto } from './dto/attendance-report.dto';
 import { ChildReportDto } from './dto/child-report.dto';

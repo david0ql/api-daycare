@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as PDFDocument from 'pdfkit';
-import * as moment from 'moment';
+import moment from 'moment';
 import { join } from 'path';
+import PdfPrinter from 'pdfmake';
+import type { Content, StyleDictionary, TDocumentDefinitions, BufferOptions, CustomTableLayout } from 'pdfmake/interfaces';
 import { ChildrenEntity } from 'src/entities/children.entity';
 import { DailyAttendanceEntity } from 'src/entities/daily_attendance.entity';
 import { IncidentsEntity } from 'src/entities/incidents.entity';
@@ -15,26 +16,40 @@ import { ChildReportDto } from './dto/child-report.dto';
 
 @Injectable()
 export class ReportsService {
-  private readonly logo = {
+  private logo = {
     image: join(process.cwd(), 'src/assets/logo.png'),
     width: 150,
     alignment: 'center' as const,
   };
 
-  private readonly styles = {
+  private readonly styles: StyleDictionary = {
     header: {
       fontSize: 18,
       bold: true,
+      color: '#2c3e50',
       margin: [0, 0, 0, 10],
     },
     subheader: {
-      fontSize: 16,
+      fontSize: 14,
       bold: true,
+      color: '#34495e',
       margin: [0, 10, 0, 5],
+    },
+    tableHeader: {
+      fontSize: 10,
+      bold: true,
+      color: '#ffffff',
+      fillColor: '#3498db',
+      alignment: 'center',
+    },
+    tableCell: {
+      fontSize: 9,
+      color: '#2c3e50',
     },
     footer: {
       fontSize: 8,
-      color: 'gray',
+      color: '#7f8c8d',
+      alignment: 'center',
     },
   };
 
@@ -74,378 +89,428 @@ export class ReportsService {
 
     const child = await this.childrenRepository.findOne({
       where: { id: childId },
+      relations: ['parentChildRelationships', 'parentChildRelationships.parent'],
     });
 
     if (!child) {
-      throw new NotFoundException(`Child with ID ${childId} not found`);
+      throw new NotFoundException('Child not found');
     }
 
-    const [attendances, incidents, activities, observations] = await Promise.all([
-      this.attendanceRepository
-        .createQueryBuilder('attendance')
-        .leftJoinAndSelect('attendance.deliveredBy2', 'deliveredBy')
-        .leftJoinAndSelect('attendance.pickedUpBy2', 'pickedUpBy')
-        .where('attendance.childId = :childId', { childId })
-        .andWhere('attendance.attendanceDate BETWEEN :startDate AND :endDate', { startDate, endDate })
-        .orderBy('attendance.attendanceDate', 'DESC')
-        .getMany(),
+    const attendances = await this.attendanceRepository
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.deliveredBy2', 'deliveredBy')
+      .leftJoinAndSelect('attendance.pickedUpBy2', 'pickedUpBy')
+      .where('attendance.childId = :childId', { childId })
+      .andWhere('attendance.attendanceDate BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .orderBy('attendance.attendanceDate', 'DESC')
+      .getMany();
 
-      this.incidentsRepository
-        .createQueryBuilder('incident')
-        .leftJoinAndSelect('incident.incidentType', 'type')
-        .where('incident.childId = :childId', { childId })
-        .andWhere('incident.incidentDate BETWEEN :startDate AND :endDate', { startDate, endDate })
-        .orderBy('incident.incidentDate', 'DESC')
-        .getMany(),
+    const activities = await this.activitiesRepository
+      .createQueryBuilder('activity')
+      .leftJoinAndSelect('activity.photos', 'photos')
+      .where('activity.childId = :childId', { childId })
+      .andWhere('activity.timeCompleted BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .orderBy('activity.timeCompleted', 'DESC')
+      .getMany();
 
-      this.activitiesRepository
-        .createQueryBuilder('activity')
-        .leftJoinAndSelect('activity.attendance', 'attendance')
-        .where('activity.childId = :childId', { childId })
-        .andWhere('attendance.attendanceDate BETWEEN :startDate AND :endDate', { startDate, endDate })
-        .orderBy('activity.timeCompleted', 'DESC')
-        .getMany(),
+    const observations = await this.observationsRepository
+      .createQueryBuilder('observation')
+      .where('observation.childId = :childId', { childId })
+      .andWhere('observation.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .orderBy('observation.createdAt', 'DESC')
+      .getMany();
 
-      this.observationsRepository
-        .createQueryBuilder('observation')
-        .leftJoinAndSelect('observation.attendance', 'attendance')
-        .where('observation.childId = :childId', { childId })
-        .andWhere('attendance.attendanceDate BETWEEN :startDate AND :endDate', { startDate, endDate })
-        .orderBy('observation.createdAt', 'DESC')
-        .getMany(),
-    ]);
+    const incidents = await this.incidentsRepository
+      .createQueryBuilder('incident')
+      .leftJoinAndSelect('incident.reportedBy2', 'reportedBy')
+      .where('incident.childId = :childId', { childId })
+      .andWhere('incident.incidentDate BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .orderBy('incident.incidentDate', 'DESC')
+      .getMany();
 
-    return this.createPDFDocument('child', { child, attendances, incidents, activities, observations, startDate, endDate });
+    return this.createPDFDocument('child', {
+      child,
+      attendances,
+      activities,
+      observations,
+      incidents,
+      startDate,
+      endDate,
+    });
   }
 
   async generatePaymentAlertsReport(): Promise<Buffer> {
+    // Get children with payment alerts (you'll need to implement this logic based on your business rules)
     const childrenWithAlerts = await this.childrenRepository
       .createQueryBuilder('child')
-      .leftJoinAndSelect('child.parentChildRelationships', 'relationship')
-      .leftJoinAndSelect('relationship.parent', 'parent')
-      .where('child.hasPaymentAlert = :hasPaymentAlert', { hasPaymentAlert: true })
-      .andWhere('child.isActive = :isActive', { isActive: true })
-      .orderBy('child.lastName', 'ASC')
-      .addOrderBy('child.firstName', 'ASC')
+      .leftJoinAndSelect('child.parentChildRelationships', 'pcr')
+      .leftJoinAndSelect('pcr.parent', 'parent')
+      .where('child.hasPaymentAlert = :hasAlert', { hasAlert: true })
       .getMany();
 
     return this.createPDFDocument('payment-alerts', { childrenWithAlerts });
   }
 
-  private async createPDFDocument(type: string, data: any): Promise<Buffer> {
-    const doc = new PDFDocument({ 
-      margin: 50,
-      pageMargins: [40, 120, 40, 60],
-      pageOrientation: 'landscape',
-      pageSize: 'A4',
-    });
-    const buffers: Buffer[] = [];
+  async generateWeeklyAttendanceReport(): Promise<Buffer> {
+    const startOfWeek = moment().startOf('week').toDate();
+    const endOfWeek = moment().endOf('week').toDate();
 
-    doc.on('data', (buffer) => buffers.push(buffer));
+    const attendances = await this.attendanceRepository
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.child', 'child')
+      .where('attendance.attendanceDate BETWEEN :startDate AND :endDate', {
+        startDate: startOfWeek,
+        endDate: endOfWeek,
+      })
+      .orderBy('attendance.attendanceDate', 'DESC')
+      .getMany();
 
-    return new Promise((resolve) => {
-      doc.on('end', () => {
-        resolve(Buffer.concat(buffers));
-      });
-
-      // Add header with logo on every page
-      doc.on('pageAdded', () => {
-        this.addHeaderWithLogo(doc, type, data);
-      });
-
-      // Add header to first page
-      this.addHeaderWithLogo(doc, type, data);
-
-      switch (type) {
-        case 'attendance':
-          this.generateAttendancePDF(doc, data);
-          break;
-        case 'child':
-          this.generateChildPDF(doc, data);
-          break;
-        case 'payment-alerts':
-          this.generatePaymentAlertsPDF(doc, data);
-          break;
-      }
-
-      // Add footer
-      this.addFooter(doc);
-
-      doc.end();
+    return this.createPDFDocument('weekly-attendance', {
+      attendances,
+      startDate: startOfWeek,
+      endDate: endOfWeek,
     });
   }
 
-  private addHeaderWithLogo(doc: PDFDocument, type: string, data: any): void {
+  async generateMonthlyAttendanceReport(): Promise<Buffer> {
+    const startOfMonth = moment().startOf('month').toDate();
+    const endOfMonth = moment().endOf('month').toDate();
+
+    const attendances = await this.attendanceRepository
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.child', 'child')
+      .where('attendance.attendanceDate BETWEEN :startDate AND :endDate', {
+        startDate: startOfMonth,
+        endDate: endOfMonth,
+      })
+      .orderBy('attendance.attendanceDate', 'DESC')
+      .getMany();
+
+    return this.createPDFDocument('monthly-attendance', {
+      attendances,
+      startDate: startOfMonth,
+      endDate: endOfMonth,
+    });
+  }
+
+  private async createPDFDocument(type: string, data: any): Promise<Buffer> {
+    const fonts = {
+      Roboto: {
+        normal: 'node_modules/pdfmake/build/vfs_fonts.js',
+        bold: 'node_modules/pdfmake/build/vfs_fonts.js',
+        italics: 'node_modules/pdfmake/build/vfs_fonts.js',
+        bolditalics: 'node_modules/pdfmake/build/vfs_fonts.js',
+      },
+    };
+
+    const printer = new PdfPrinter(fonts);
+    const docDefinition = this.getDocumentDefinition(type, data);
+    
+    return new Promise((resolve, reject) => {
+      const pdfDoc = printer.createPdfKitDocument(docDefinition);
+      const chunks: Buffer[] = [];
+
+      pdfDoc.on('data', (chunk) => chunks.push(chunk));
+      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
+      pdfDoc.on('error', reject);
+
+      pdfDoc.end();
+    });
+  }
+
+  private getDocumentDefinition(type: string, data: any): TDocumentDefinitions {
     const today = moment();
     let title = 'Daycare Report';
 
     // Customize title based on report type
     switch (type) {
       case 'attendance':
-        if (data.startDate && data.endDate) {
-          title = `Daycare Report - Attendance ${moment(data.startDate).format('MM/DD/YYYY')} to ${moment(data.endDate).format('MM/DD/YYYY')}`;
-        } else {
-          title = 'Daycare Report - Attendance';
-        }
+        title = `Attendance Report - ${moment(data.startDate).format('MM/DD/YYYY')} to ${moment(data.endDate).format('MM/DD/YYYY')}`;
         break;
       case 'child':
-        if (data.child) {
-          title = `Daycare Report - ${data.child.firstName} ${data.child.lastName}`;
-        } else {
-          title = 'Daycare Report - Child Report';
-        }
+        title = `Child Report - ${data.child.firstName} ${data.child.lastName}`;
         break;
       case 'payment-alerts':
-        title = 'Daycare Report - Payment Alerts';
+        title = 'Payment Alerts Report';
+        break;
+      case 'weekly-attendance':
+        title = `Weekly Attendance Report - Week of ${moment(data.startDate).format('MM/DD/YYYY')}`;
+        break;
+      case 'monthly-attendance':
+        title = `Monthly Attendance Report - ${moment(data.startDate).format('MMMM YYYY')}`;
         break;
     }
 
-    // Try to add logo, fallback to text if logo doesn't exist
-    try {
-      doc.image(this.logo.image, 50, 30, { width: this.logo.width });
-    } catch (error) {
-      // If logo doesn't exist, just use text
-      doc.fontSize(16).text('The Children\'s World', 50, 40, { bold: true });
+    const docDefinition: TDocumentDefinitions = {
+      styles: this.styles,
+      pageMargins: [40, 120, 40, 60],
+      pageOrientation: 'landscape',
+      pageSize: 'A4',
+      header: {
+        columns: [
+          this.logo,
+          {
+            text: title,
+            style: 'header',
+          },
+        ],
+      },
+      footer: {
+        text: `© ${today.format('YYYY')} The Children's World. This document is confidential and cannot be shared.`,
+        style: 'footer',
+      },
+      content: this.getContentByType(type, data),
+    };
+
+    return docDefinition;
+  }
+
+  private getContentByType(type: string, data: any): Content[] {
+    switch (type) {
+      case 'attendance':
+        return this.generateAttendanceContent(data);
+      case 'child':
+        return this.generateChildContent(data);
+      case 'payment-alerts':
+        return this.generatePaymentAlertsContent(data);
+      case 'weekly-attendance':
+        return this.generateWeeklyAttendanceContent(data);
+      case 'monthly-attendance':
+        return this.generateMonthlyAttendanceContent(data);
+      default:
+        return [{ text: 'Report not found', style: 'subheader' }];
     }
+  }
 
-    doc.fontSize(16)
-      .text(title, 220, 40, { bold: true, align: 'center' });
+  private generateAttendanceContent(data: any): Content[] {
+    const { attendances, startDate, endDate } = data;
+    const content: Content[] = [];
 
-    doc.fontSize(10)
-      .text(`Generated on ${today.format('LL')} at ${today.format('LT')}`, 50, 80, { 
-        align: 'right',
-        color: 'gray' 
+    content.push({
+      text: `Report Period: ${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
+      style: 'subheader',
+    });
+
+    content.push({
+      text: `Total Attendance Records: ${attendances.length}`,
+      style: 'subheader',
+    });
+
+    if (attendances.length === 0) {
+      content.push({
+        text: 'No attendance records found for the specified period.',
+        style: 'tableCell',
+      });
+    } else {
+      const tableBody = [
+        ['Date', 'Child Name', 'Check In', 'Check Out', 'Delivered By', 'Picked Up By', 'Notes'],
+      ];
+
+      attendances.forEach((attendance) => {
+        tableBody.push([
+          moment(attendance.attendanceDate).format('MM/DD/YYYY'),
+          `${attendance.child.firstName} ${attendance.child.lastName}`,
+          attendance.checkInTime ? moment(attendance.checkInTime).format('HH:mm') : 'Not checked in',
+          attendance.checkOutTime ? moment(attendance.checkOutTime).format('HH:mm') : 'Not checked out',
+          attendance.deliveredBy ? `${attendance.deliveredBy.firstName} ${attendance.deliveredBy.lastName}` : 'N/A',
+          attendance.pickedUpBy ? `${attendance.pickedUpBy.firstName} ${attendance.pickedUpBy.lastName}` : 'N/A',
+          attendance.checkInNotes || attendance.checkOutNotes || 'No notes',
+        ]);
       });
 
-    // Draw line under header
-    doc.moveTo(50, 100).lineTo(doc.page.width - 50, 100).stroke();
-  }
-
-  private addFooter(doc: PDFDocument): void {
-    const pageCount = doc.pageCount;
-    doc.pageCount = pageCount;
-    
-    for (let i = 0; i < pageCount; i++) {
-      doc.switchToPage(i);
-      doc.fontSize(8)
-        .text(`© ${moment().format('YYYY')} The Children's World. This document is confidential and cannot be shared.`, 
-              50, doc.page.height - 30, { align: 'center', color: 'gray' });
+      content.push({
+        table: {
+          headerRows: 1,
+          widths: ['*', '*', '*', '*', '*', '*', '*'],
+          body: tableBody,
+        },
+        layout: 'lightHorizontalLines',
+      });
     }
+
+    return content;
   }
 
-  private generateAttendancePDF(doc: PDFDocument, data: any): void {
-    const { attendances, startDate, endDate } = data;
+  private generateChildContent(data: any): Content[] {
+    const { child, attendances, activities, observations, incidents, startDate, endDate } = data;
+    const content: Content[] = [];
 
-    // Start content after header
-    let yPosition = 120;
-
-    const totalDays = moment(endDate).diff(moment(startDate), 'days') + 1;
-    const totalRecords = attendances.length;
-    const uniqueChildren = [...new Set(attendances.map(a => a.childId))].length;
-
-    doc.fontSize(14).text('Summary:', 50, yPosition, { bold: true });
-    yPosition += 20;
-    
-    doc.fontSize(12).text(`• Total days: ${totalDays}`, 50, yPosition);
-    yPosition += 15;
-    doc.text(`• Total records: ${totalRecords}`, 50, yPosition);
-    yPosition += 15;
-    doc.text(`• Unique children: ${uniqueChildren}`, 50, yPosition);
-    yPosition += 25;
-
-    doc.fontSize(14).text('Attendance Details:', 50, yPosition, { bold: true });
-    yPosition += 25;
-
-    // Table headers
-    doc.fontSize(10).text('Date', 50, yPosition, { bold: true });
-    doc.text('Child', 120, yPosition, { bold: true });
-    doc.text('Check In', 220, yPosition, { bold: true });
-    doc.text('Check Out', 300, yPosition, { bold: true });
-    doc.text('Status', 380, yPosition, { bold: true });
-    doc.text('Delivered By', 450, yPosition, { bold: true });
-    doc.text('Picked Up By', 550, yPosition, { bold: true });
-
-    // Draw line under headers
-    doc.moveTo(50, yPosition + 15).lineTo(750, yPosition + 15).stroke();
-    yPosition += 25;
-
-    const pageHeight = doc.page.height - 80;
-
-    attendances.forEach((attendance) => {
-      if (yPosition > pageHeight) {
-        doc.addPage();
-        yPosition = 120;
-      }
-
-      const date = moment(attendance.attendanceDate).format('DD/MM/YYYY');
-      const childName = `${attendance.child.firstName} ${attendance.child.lastName}`;
-      const checkIn = attendance.checkInTime ? moment(attendance.checkInTime).format('HH:mm') : 'Not recorded';
-      const checkOut = attendance.checkOutTime ? moment(attendance.checkOutTime).format('HH:mm') : 'Not recorded';
-      const status = attendance.checkOutTime ? 'Complete' : attendance.checkInTime ? 'Present' : 'Absent';
-      const deliveredBy = attendance.deliveredBy2 ? attendance.deliveredBy2.name : 'Not recorded';
-      const pickedUpBy = attendance.pickedUpBy2 ? attendance.pickedUpBy2.name : 'Not recorded';
-
-      doc.fontSize(9).text(date, 50, yPosition);
-      doc.text(childName, 120, yPosition);
-      doc.text(checkIn, 220, yPosition);
-      doc.text(checkOut, 300, yPosition);
-      doc.text(status, 380, yPosition);
-      doc.text(deliveredBy, 450, yPosition);
-      doc.text(pickedUpBy, 550, yPosition);
-
-      yPosition += 15;
+    // Child Information
+    content.push({
+      text: 'Child Information',
+      style: 'subheader',
     });
-  }
 
-  private generateChildPDF(doc: PDFDocument, data: any): void {
-    const { child, attendances, incidents, activities, observations, startDate, endDate } = data;
+    const primaryParent = child.parentChildRelationships.find(pcr => pcr.isPrimary);
+    content.push({
+      table: {
+        widths: ['*', '*'],
+        body: [
+          ['Name', `${child.firstName} ${child.lastName}`],
+          ['Date of Birth', moment(child.dateOfBirth).format('MM/DD/YYYY')],
+          ['Primary Parent', primaryParent ? `${primaryParent.parent.firstName} ${primaryParent.parent.lastName}` : 'Not assigned'],
+          ['Report Period', `${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`],
+        ],
+      },
+      layout: 'lightHorizontalLines',
+    });
 
-    // Start content after header
-    let yPosition = 120;
+    // Attendance Summary
+    content.push({
+      text: 'Attendance Summary',
+      style: 'subheader',
+    });
 
-    doc.fontSize(14).text('Child Information:', 50, yPosition, { bold: true });
-    yPosition += 20;
-    
-    doc.fontSize(12).text(`• Name: ${child.firstName} ${child.lastName}`, 50, yPosition);
-    yPosition += 15;
-    doc.text(`• Birth Date: ${moment(child.birthDate).format('DD/MM/YYYY')}`, 50, yPosition);
-    yPosition += 15;
-    doc.text(`• Age: ${moment().diff(moment(child.birthDate), 'years')} years old`, 50, yPosition);
-    yPosition += 15;
-    
-    if (child.birthCity) {
-      doc.text(`• Birth City: ${child.birthCity}`, 50, yPosition);
-      yPosition += 15;
+    content.push({
+      text: `Total Days Attended: ${attendances.length}`,
+      style: 'tableCell',
+    });
+
+    // Activities
+    if (activities.length > 0) {
+      content.push({
+        text: 'Activities',
+        style: 'subheader',
+      });
+
+      activities.forEach((activity) => {
+        content.push({
+          text: `${moment(activity.timeCompleted).format('MM/DD/YYYY')} - ${this.getActivityTypeName(activity.activityType)}`,
+          style: 'tableCell',
+        });
+        if (activity.notes) {
+          content.push({
+            text: activity.notes,
+            style: 'tableCell',
+            margin: [20, 0, 0, 5],
+          });
+        }
+      });
     }
-    
-    if (child.address) {
-      doc.text(`• Address: ${child.address}`, 50, yPosition);
-      yPosition += 15;
+
+    // Observations
+    if (observations.length > 0) {
+      content.push({
+        text: 'Observations',
+        style: 'subheader',
+      });
+
+      observations.forEach((observation) => {
+        content.push({
+          text: `${moment(observation.createdAt).format('MM/DD/YYYY')} - Mood: ${observation.mood}`,
+          style: 'tableCell',
+        });
+        if (observation.generalObservations) {
+          content.push({
+            text: observation.generalObservations,
+            style: 'tableCell',
+            margin: [20, 0, 0, 5],
+          });
+        }
+      });
     }
-    
-    yPosition += 10;
 
-    const totalDays = moment(endDate).diff(moment(startDate), 'days') + 1;
-    const attendanceDays = attendances.length;
-    const attendanceRate = totalDays > 0 ? ((attendanceDays / totalDays) * 100).toFixed(1) : '0';
-    
-    doc.fontSize(14).text('Attendance Summary:', 50, yPosition, { bold: true });
-    yPosition += 20;
-    
-    doc.fontSize(12).text(`• Total days in period: ${totalDays}`, 50, yPosition);
-    yPosition += 15;
-    doc.text(`• Days attended: ${attendanceDays}`, 50, yPosition);
-    yPosition += 15;
-    doc.text(`• Attendance rate: ${attendanceRate}%`, 50, yPosition);
-    yPosition += 25;
-
+    // Incidents
     if (incidents.length > 0) {
-      doc.fontSize(14).text('Reported Incidents:', 50, yPosition, { bold: true });
-      yPosition += 20;
+      content.push({
+        text: 'Incidents',
+        style: 'subheader',
+      });
 
       incidents.forEach((incident) => {
-        if (yPosition > doc.page.height - 100) {
-          doc.addPage();
-          yPosition = 120;
+        content.push({
+          text: `${moment(incident.incidentDate).format('MM/DD/YYYY')} - ${incident.title}`,
+          style: 'tableCell',
+        });
+        if (incident.description) {
+          content.push({
+            text: incident.description,
+            style: 'tableCell',
+            margin: [20, 0, 0, 5],
+          });
         }
-
-        const date = moment(incident.incidentDate).format('DD/MM/YYYY HH:mm');
-        doc.fontSize(12).text(`${date} - ${incident.title}`, 50, yPosition, { bold: true });
-        yPosition += 15;
-        
-        doc.fontSize(10).text(`Type: ${incident.incidentType.name}`, 50, yPosition);
-        yPosition += 12;
-        
-        if (incident.location) {
-          doc.text(`Location: ${incident.location}`, 50, yPosition);
-          yPosition += 12;
-        }
-        
-        doc.text(`Description: ${incident.description}`, 50, yPosition);
-        yPosition += 12;
-        
-        if (incident.actionTaken) {
-          doc.text(`Action taken: ${incident.actionTaken}`, 50, yPosition);
-          yPosition += 12;
-        }
-        
-        yPosition += 10;
       });
     }
 
-    if (activities.length > 0) {
-      if (yPosition > doc.page.height - 150) {
-        doc.addPage();
-        yPosition = 120;
-      }
-
-      doc.fontSize(14).text('Daily Activities:', 50, yPosition, { bold: true });
-      yPosition += 20;
-
-      const activitySummary = activities.reduce((acc, activity) => {
-        if (!acc[activity.activityType]) {
-          acc[activity.activityType] = 0;
-        }
-        acc[activity.activityType]++;
-        return acc;
-      }, {});
-
-      Object.entries(activitySummary).forEach(([type, count]) => {
-        doc.fontSize(12).text(`• ${this.getActivityTypeName(type)}: ${count} times`, 50, yPosition);
-        yPosition += 15;
-      });
-    }
+    return content;
   }
 
-  private generatePaymentAlertsPDF(doc: PDFDocument, data: any): void {
+  private generatePaymentAlertsContent(data: any): Content[] {
     const { childrenWithAlerts } = data;
+    const content: Content[] = [];
 
-    // Start content after header
-    let yPosition = 120;
+    content.push({
+      text: 'Summary',
+      style: 'subheader',
+    });
 
-    doc.fontSize(14).text('Summary:', 50, yPosition, { bold: true });
-    yPosition += 20;
-    
-    doc.fontSize(12).text(`• Total children with payment alerts: ${childrenWithAlerts.length}`, 50, yPosition);
-    yPosition += 25;
+    content.push({
+      text: `Total children with payment alerts: ${childrenWithAlerts.length}`,
+      style: 'tableCell',
+    });
 
     if (childrenWithAlerts.length === 0) {
-      doc.fontSize(12).text('No children with active payment alerts.', 50, yPosition, { align: 'center' });
+      content.push({
+        text: 'No children with active payment alerts.',
+        style: 'tableCell',
+        alignment: 'center',
+      });
     } else {
-      doc.fontSize(14).text('Children with Payment Alerts:', 50, yPosition, { bold: true });
-      yPosition += 25;
+      content.push({
+        text: 'Children with Payment Alerts',
+        style: 'subheader',
+      });
 
-      // Table headers
-      doc.fontSize(10).text('Child', 50, yPosition, { bold: true });
-      doc.text('Parent/Guardian', 200, yPosition, { bold: true });
-      doc.text('Phone', 400, yPosition, { bold: true });
-      doc.text('Email', 550, yPosition, { bold: true });
-
-      // Draw line under headers
-      doc.moveTo(50, yPosition + 15).lineTo(750, yPosition + 15).stroke();
-      yPosition += 25;
-
-      const pageHeight = doc.page.height - 80;
+      const tableBody = [
+        ['Child', 'Parent/Guardian', 'Phone', 'Email'],
+      ];
 
       childrenWithAlerts.forEach((child) => {
-        if (yPosition > pageHeight) {
-          doc.addPage();
-          yPosition = 120;
-        }
-
-        const childName = `${child.firstName} ${child.lastName}`;
         const primaryParent = child.parentChildRelationships.find(pcr => pcr.isPrimary);
         const parentName = primaryParent ? `${primaryParent.parent.firstName} ${primaryParent.parent.lastName}` : 'Not assigned';
         const parentPhone = primaryParent?.parent.phone || 'Not available';
         const parentEmail = primaryParent?.parent.email || 'Not available';
 
-        doc.fontSize(9).text(childName, 50, yPosition);
-        doc.text(parentName, 200, yPosition);
-        doc.text(parentPhone, 400, yPosition);
-        doc.text(parentEmail, 550, yPosition);
+        tableBody.push([
+          `${child.firstName} ${child.lastName}`,
+          parentName,
+          parentPhone,
+          parentEmail,
+        ]);
+      });
 
-        yPosition += 15;
+      content.push({
+        table: {
+          headerRows: 1,
+          widths: ['*', '*', '*', '*'],
+          body: tableBody,
+        },
+        layout: 'lightHorizontalLines',
       });
     }
+
+    return content;
+  }
+
+  private generateWeeklyAttendanceContent(data: any): Content[] {
+    return this.generateAttendanceContent(data);
+  }
+
+  private generateMonthlyAttendanceContent(data: any): Content[] {
+    return this.generateAttendanceContent(data);
+  }
+
+  private getActivityTypeName(type: string): string {
+    const types: { [key: string]: string } = {
+      'art': 'Art & Crafts',
+      'music': 'Music & Dance',
+      'outdoor': 'Outdoor Play',
+      'story': 'Story Time',
+      'meal': 'Meal Time',
+      'nap': 'Nap Time',
+      'learning': 'Learning Activity',
+      'other': 'Other',
+    };
+    return types[type] || type;
   }
 }

@@ -141,8 +141,8 @@ export class AttendanceService {
       
       // Update existing attendance with check-in
       existingAttendance.checkInTime = new Date();
-      existingAttendance.deliveredBy = deliveredBy;
-      existingAttendance.checkInNotes = checkInNotes;
+      existingAttendance.deliveredBy = deliveredBy || null;
+      existingAttendance.checkInNotes = checkInNotes || null;
       existingAttendance.updatedBy = createdBy;
 
       return this.attendanceRepository.save(existingAttendance);
