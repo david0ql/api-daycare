@@ -9,6 +9,7 @@ import { IncidentsModule } from './api/incidents/incidents.module';
 import { DocumentsModule } from './api/documents/documents.module';
 import { CalendarModule } from './api/calendar/calendar.module';
 import { ReportsModule } from './api/reports/reports.module';
+import { RolesModule } from './api/roles/roles.module';
 
 import envVars from './config/env';
 
@@ -33,6 +34,7 @@ import envVars from './config/env';
     DocumentsModule,
     CalendarModule,
     ReportsModule,
+    RolesModule,
   ],
   controllers: [],
   providers: [],

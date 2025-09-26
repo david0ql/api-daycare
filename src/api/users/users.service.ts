@@ -156,4 +156,16 @@ export class UsersService {
     user.isActive = !user.isActive;
     return this.usersRepository.save(user);
   }
+
+  /**
+   * Get all available user roles
+   * @returns Promise<UserRolesEntity[]> - Array of all user roles
+   */
+  async getRoles(): Promise<UserRolesEntity[]> {
+    return this.userRolesRepository.find({
+      order: {
+        id: 'ASC',
+      },
+    });
+  }
 }

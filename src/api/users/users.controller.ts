@@ -22,6 +22,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { RoleResponseDto } from './dto/role-response.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { SearchDto } from 'src/dto/search.dto';
@@ -37,6 +38,20 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('user-roles')
+  @ApiOperation({
+    summary: 'Get all user roles',
+    description: 'Retrieve all available user roles in the system. Only administrators can access this endpoint.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all available user roles',
+    type: [RoleResponseDto],
+  })
+  async getRoles(): Promise<RoleResponseDto[]> {
+    return this.usersService.getRoles();
+  }
 
   @Post()
   @Roles('administrator')
@@ -197,4 +212,5 @@ export class UsersController {
     const { roleId, isActive, ...allowedUpdates } = updateUserDto;
     return this.usersService.update(user.id, allowedUpdates);
   }
+
 }
