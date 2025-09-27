@@ -2,8 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChildrenEntity } from 'src/entities/children.entity';
+import { ParentChildRelationshipsEntity } from 'src/entities/parent_child_relationships.entity';
+import { EmergencyContactsEntity } from 'src/entities/emergency_contacts.entity';
+import { AuthorizedPickupPersonsEntity } from 'src/entities/authorized_pickup_persons.entity';
+import { MedicalInformationEntity } from 'src/entities/medical_information.entity';
+import { UsersEntity } from 'src/entities/users.entity';
 import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
+import { CreateChildWithRelationsDto } from './dto/create-child-with-relations.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
@@ -14,11 +20,73 @@ export class ChildrenService {
   constructor(
     @InjectRepository(ChildrenEntity)
     private readonly childrenRepository: Repository<ChildrenEntity>,
+    @InjectRepository(ParentChildRelationshipsEntity)
+    private readonly parentChildRelationshipsRepository: Repository<ParentChildRelationshipsEntity>,
+    @InjectRepository(EmergencyContactsEntity)
+    private readonly emergencyContactsRepository: Repository<EmergencyContactsEntity>,
+    @InjectRepository(AuthorizedPickupPersonsEntity)
+    private readonly authorizedPickupPersonsRepository: Repository<AuthorizedPickupPersonsEntity>,
+    @InjectRepository(MedicalInformationEntity)
+    private readonly medicalInformationRepository: Repository<MedicalInformationEntity>,
+    @InjectRepository(UsersEntity)
+    private readonly usersRepository: Repository<UsersEntity>,
   ) {}
 
   async create(createChildDto: CreateChildDto): Promise<ChildrenEntity> {
     const child = this.childrenRepository.create(createChildDto);
     return this.childrenRepository.save(child);
+  }
+
+  async createWithRelations(createChildWithRelationsDto: CreateChildWithRelationsDto): Promise<ChildrenEntity> {
+    // Create the child first
+    const { parentRelationships, emergencyContacts, authorizedPickupPersons, medicalInformation, ...childData } = createChildWithRelationsDto;
+    
+    const child = this.childrenRepository.create(childData);
+    const savedChild = await this.childrenRepository.save(child);
+
+    // Create parent-child relationships
+    if (parentRelationships && parentRelationships.length > 0) {
+      for (const relationship of parentRelationships) {
+        const parentChildRelationship = this.parentChildRelationshipsRepository.create({
+          ...relationship,
+          childId: savedChild.id,
+        });
+        await this.parentChildRelationshipsRepository.save(parentChildRelationship);
+      }
+    }
+
+    // Create emergency contacts
+    if (emergencyContacts && emergencyContacts.length > 0) {
+      for (const contact of emergencyContacts) {
+        const emergencyContact = this.emergencyContactsRepository.create({
+          ...contact,
+          childId: savedChild.id,
+        });
+        await this.emergencyContactsRepository.save(emergencyContact);
+      }
+    }
+
+    // Create authorized pickup persons
+    if (authorizedPickupPersons && authorizedPickupPersons.length > 0) {
+      for (const person of authorizedPickupPersons) {
+        const authorizedPerson = this.authorizedPickupPersonsRepository.create({
+          ...person,
+          childId: savedChild.id,
+        });
+        await this.authorizedPickupPersonsRepository.save(authorizedPerson);
+      }
+    }
+
+    // Create medical information
+    if (medicalInformation) {
+      const medicalInfo = this.medicalInformationRepository.create({
+        ...medicalInformation,
+        childId: savedChild.id,
+      });
+      await this.medicalInformationRepository.save(medicalInfo);
+    }
+
+    return savedChild;
   }
 
   async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<ChildrenEntity>> {
@@ -38,6 +106,13 @@ export class ChildrenService {
   async findOne(id: number): Promise<ChildrenEntity> {
     const child = await this.childrenRepository.findOne({
       where: { id },
+      relations: [
+        'parentChildRelationships',
+        'parentChildRelationships.parent',
+        'emergencyContacts',
+        'authorizedPickupPersons',
+        'medicalInformation'
+      ],
     });
 
     if (!child) {
@@ -139,5 +214,29 @@ export class ChildrenService {
     }
     
     return { years, months };
+  }
+
+  async getAvailableParents() {
+    // Get users with parent role
+    const parents = await this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoin('user.role', 'role')
+      .where('role.name = :roleName', { roleName: 'parent' })
+      .andWhere('user.isActive = :isActive', { isActive: true })
+      .select([
+        'user.id',
+        'user.firstName',
+        'user.lastName',
+        'user.email',
+        'user.phone'
+      ])
+      .getMany();
+
+    return parents.map(parent => ({
+      id: parent.id,
+      name: `${parent.firstName} ${parent.lastName}`,
+      email: parent.email,
+      phone: parent.phone,
+    }));
   }
 }

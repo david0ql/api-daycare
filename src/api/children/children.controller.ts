@@ -22,6 +22,7 @@ import { ChildrenService } from './children.service';
 import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { ChildResponseDto } from './dto/child-response.dto';
+import { CreateChildWithRelationsDto } from './dto/create-child-with-relations.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { SearchDto } from 'src/dto/search.dto';
@@ -47,6 +48,18 @@ export class ChildrenController {
   })
   async create(@Body() createChildDto: CreateChildDto): Promise<ChildrenEntity> {
     return this.childrenService.create(createChildDto);
+  }
+
+  @Post('with-relations')
+  @Roles('administrator', 'educator')
+  @ApiOperation({ summary: 'Create a new child with relationships' })
+  @ApiResponse({
+    status: 201,
+    description: 'Child with relationships created successfully',
+    type: ChildResponseDto,
+  })
+  async createWithRelations(@Body() createChildWithRelationsDto: CreateChildWithRelationsDto): Promise<ChildrenEntity> {
+    return this.childrenService.createWithRelations(createChildWithRelationsDto);
   }
 
   @Get()
@@ -104,6 +117,17 @@ export class ChildrenController {
   })
   async getChildrenWithPaymentAlerts(@Query() pageOptionsDto: PageOptionsDto): Promise<PageDto<ChildrenEntity>> {
     return this.childrenService.getChildrenWithPaymentAlerts(pageOptionsDto);
+  }
+
+  @Get('available-parents')
+  @Roles('administrator', 'educator')
+  @ApiOperation({ summary: 'Get available users to assign as parents' })
+  @ApiResponse({
+    status: 200,
+    description: 'Available parents retrieved successfully',
+  })
+  async getAvailableParents() {
+    return this.childrenService.getAvailableParents();
   }
 
   @Get(':id')
