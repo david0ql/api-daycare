@@ -70,5 +70,5 @@ export class CreateAttendanceDto {
   })
   @IsString()
   @IsOptional()
-  checkOutNotes?: string;
+  notes?: string;
 }

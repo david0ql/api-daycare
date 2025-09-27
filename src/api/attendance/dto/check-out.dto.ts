@@ -24,5 +24,5 @@ export class CheckOutDto {
   })
   @IsString()
   @IsNotEmpty()
-  checkOutNotes: string;
+  notes: string;
 }

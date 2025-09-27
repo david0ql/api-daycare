@@ -25,7 +25,7 @@ export class AttendanceService {
   ) {}
 
   async create(createAttendanceDto: CreateAttendanceDto, createdBy: number): Promise<DailyAttendanceEntity> {
-    const { childId, attendanceDate, ...attendanceData } = createAttendanceDto;
+    const { childId, attendanceDate, notes, ...attendanceData } = createAttendanceDto;
 
     // Check if child exists
     const child = await this.childrenRepository.findOne({
@@ -72,6 +72,7 @@ export class AttendanceService {
       ...attendanceData,
       childId,
       attendanceDate,
+      checkOutNotes: notes,
       createdBy,
     });
 
@@ -90,6 +91,7 @@ export class AttendanceService {
       .take(pageOptionsDto.take);
 
     const [attendances, totalCount] = await queryBuilder.getManyAndCount();
+
 
     const pageMetaDto = new PageMetaDto({ totalCount, pageOptionsDto });
 
@@ -159,7 +161,7 @@ export class AttendanceService {
   }
 
   async checkOut(checkOutDto: CheckOutDto, updatedBy: number): Promise<DailyAttendanceEntity> {
-    const { childId, pickedUpBy, checkOutNotes } = checkOutDto;
+    const { childId, pickedUpBy, notes } = checkOutDto;
     const attendanceDate = new Date().toISOString().split('T')[0];
 
     // Find today's attendance
@@ -192,7 +194,7 @@ export class AttendanceService {
     // Update attendance with check-out
     attendance.checkOutTime = new Date();
     attendance.pickedUpBy = pickedUpBy;
-    attendance.checkOutNotes = checkOutNotes;
+    attendance.checkOutNotes = notes;
     attendance.updatedBy = updatedBy;
 
     return this.attendanceRepository.save(attendance);

@@ -131,6 +131,7 @@ export class ChildrenController {
     return this.childrenService.getAvailableParents();
   }
 
+
   @Get(':id')
   @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get child by ID' })
