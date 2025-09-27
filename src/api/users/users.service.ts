@@ -95,8 +95,8 @@ export class UsersService {
       updateData['passwordHash'] = await bcrypt.hash(password, saltRounds);
     }
 
-    // If role is being updated, verify it exists
-    if (roleId) {
+    // If role is being updated, verify it exists and include it in updateData
+    if (roleId !== undefined) {
       const role = await this.userRolesRepository.findOne({
         where: { id: roleId },
       });
@@ -104,6 +104,9 @@ export class UsersService {
       if (!role) {
         throw new NotFoundException('Role not found');
       }
+      
+      // Include roleId in the update data
+      updateData['roleId'] = roleId;
     }
 
     await this.usersRepository.update(id, updateData);
