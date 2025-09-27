@@ -10,6 +10,7 @@ import { UsersEntity } from 'src/entities/users.entity';
 import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { CreateChildWithRelationsDto } from './dto/create-child-with-relations.dto';
+import { UpdateChildWithRelationsDto } from './dto/update-child-with-relations.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
@@ -125,6 +126,76 @@ export class ChildrenService {
   async update(id: number, updateChildDto: UpdateChildDto): Promise<ChildrenEntity> {
     await this.findOne(id);
     await this.childrenRepository.update(id, updateChildDto);
+    return this.findOne(id);
+  }
+
+  async updateWithRelations(id: number, updateChildWithRelationsDto: UpdateChildWithRelationsDto): Promise<ChildrenEntity> {
+    const { parentRelationships, emergencyContacts, authorizedPickupPersons, medicalInformation, ...childData } = updateChildWithRelationsDto;
+    
+    // Update child basic data
+    await this.findOne(id);
+    await this.childrenRepository.update(id, childData);
+
+    // Update parent-child relationships
+    if (parentRelationships && parentRelationships.length > 0) {
+      // Delete existing relationships
+      await this.parentChildRelationshipsRepository.delete({ childId: id });
+      
+      // Create new relationships
+      for (const relationship of parentRelationships) {
+        const parentChildRelationship = this.parentChildRelationshipsRepository.create({
+          ...relationship,
+          childId: id,
+        });
+        await this.parentChildRelationshipsRepository.save(parentChildRelationship);
+      }
+    }
+
+    // Update emergency contacts
+    if (emergencyContacts && emergencyContacts.length > 0) {
+      // Delete existing emergency contacts
+      await this.emergencyContactsRepository.delete({ childId: id });
+      
+      // Create new emergency contacts
+      for (const contact of emergencyContacts) {
+        const emergencyContact = this.emergencyContactsRepository.create({
+          ...contact,
+          childId: id,
+        });
+        await this.emergencyContactsRepository.save(emergencyContact);
+      }
+    }
+
+    // Update authorized pickup persons
+    if (authorizedPickupPersons && authorizedPickupPersons.length > 0) {
+      // Delete existing authorized pickup persons
+      await this.authorizedPickupPersonsRepository.delete({ childId: id });
+      
+      // Create new authorized pickup persons
+      for (const person of authorizedPickupPersons) {
+        const authorizedPickupPerson = this.authorizedPickupPersonsRepository.create({
+          ...person,
+          childId: id,
+        });
+        await this.authorizedPickupPersonsRepository.save(authorizedPickupPerson);
+      }
+    }
+
+    // Update medical information
+    if (medicalInformation && medicalInformation.length > 0) {
+      // Delete existing medical information
+      await this.medicalInformationRepository.delete({ childId: id });
+      
+      // Create new medical information
+      for (const medical of medicalInformation) {
+        const medicalInfo = this.medicalInformationRepository.create({
+          ...medical,
+          childId: id,
+        });
+        await this.medicalInformationRepository.save(medicalInfo);
+      }
+    }
+
     return this.findOne(id);
   }
 

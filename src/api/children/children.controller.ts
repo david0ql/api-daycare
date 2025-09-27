@@ -23,6 +23,7 @@ import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { ChildResponseDto } from './dto/child-response.dto';
 import { CreateChildWithRelationsDto } from './dto/create-child-with-relations.dto';
+import { UpdateChildWithRelationsDto } from './dto/update-child-with-relations.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { SearchDto } from 'src/dto/search.dto';
@@ -185,6 +186,26 @@ export class ChildrenController {
     @Body() updateChildDto: UpdateChildDto,
   ): Promise<ChildrenEntity> {
     return this.childrenService.update(id, updateChildDto);
+  }
+
+  @Patch(':id/with-relations')
+  @Roles('administrator', 'educator')
+  @ApiOperation({ summary: 'Update child with relationships' })
+  @ApiParam({ name: 'id', description: 'Child ID', example: 1 })
+  @ApiResponse({
+    status: 200,
+    description: 'Child with relationships updated successfully',
+    type: ChildResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Child not found',
+  })
+  async updateWithRelations(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateChildWithRelationsDto: UpdateChildWithRelationsDto,
+  ): Promise<ChildrenEntity> {
+    return this.childrenService.updateWithRelations(id, updateChildWithRelationsDto);
   }
 
   @Patch(':id/toggle-payment-alert')
