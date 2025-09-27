@@ -108,14 +108,21 @@ export class AttendanceService {
       throw new NotFoundException(`Attendance with ID ${id} not found`);
     }
 
+    console.log('🔍 Backend - Attendance findOne - attendance:', attendance);
+    console.log('🔍 Backend - Attendance findOne - checkInNotes:', attendance.checkInNotes);
+    console.log('🔍 Backend - Attendance findOne - checkOutNotes:', attendance.checkOutNotes);
+
     return attendance;
   }
 
   async update(id: number, updateAttendanceDto: UpdateAttendanceDto, updatedBy: number): Promise<DailyAttendanceEntity> {
     await this.findOne(id);
     
+    const { notes, ...restDto } = updateAttendanceDto;
+    
     await this.attendanceRepository.update(id, {
-      ...updateAttendanceDto,
+      ...restDto,
+      checkOutNotes: notes, // Map notes to checkOutNotes
       updatedBy,
     });
 
