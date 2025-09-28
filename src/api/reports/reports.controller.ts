@@ -51,8 +51,11 @@ export class ReportsController {
   ): Promise<void> {
     const pdfBuffer = await this.reportsService.generateAttendanceReport(attendanceReportDto);
     
+    const { startDate, endDate } = attendanceReportDto;
+    const filename = `attendance-report-${startDate}-to-${endDate}.pdf`;
+    
     response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', 'attachment; filename="attendance-report.pdf"');
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Content-Length', pdfBuffer.length);
     
     response.send(pdfBuffer);
@@ -81,8 +84,11 @@ export class ReportsController {
     const fullDto = { ...childReportDto, childId };
     const pdfBuffer = await this.reportsService.generateChildReport(fullDto);
     
+    const { startDate, endDate } = childReportDto;
+    const filename = `child-${childId}-report-${startDate}-to-${endDate}.pdf`;
+    
     response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', `attachment; filename="child-${childId}-report.pdf"`);
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Content-Length', pdfBuffer.length);
     
     response.send(pdfBuffer);
@@ -106,8 +112,11 @@ export class ReportsController {
   async generatePaymentAlertsReport(@Res() response: Response): Promise<void> {
     const pdfBuffer = await this.reportsService.generatePaymentAlertsReport();
     
+    const currentDate = moment().format('YYYY-MM-DD');
+    const filename = `payment-alerts-report-${currentDate}.pdf`;
+    
     response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', 'attachment; filename="payment-alerts-report.pdf"');
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Content-Length', pdfBuffer.length);
     
     response.send(pdfBuffer);
@@ -143,8 +152,10 @@ export class ReportsController {
     
     const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto);
     
+    const filename = `weekly-attendance-report-${startDate}-to-${endDate}.pdf`;
+    
     response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', 'attachment; filename="weekly-attendance-report.pdf"');
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Content-Length', pdfBuffer.length);
     
     response.send(pdfBuffer);
@@ -180,8 +191,10 @@ export class ReportsController {
     
     const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto);
     
+    const filename = `monthly-attendance-report-${startDate}-to-${endDate}.pdf`;
+    
     response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', 'attachment; filename="monthly-attendance-report.pdf"');
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Content-Length', pdfBuffer.length);
     
     response.send(pdfBuffer);
@@ -219,8 +232,10 @@ export class ReportsController {
     
     const pdfBuffer = await this.reportsService.generateChildReport(reportDto);
     
+    const filename = `child-${childId}-monthly-report-${startDate}-to-${endDate}.pdf`;
+    
     response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader('Content-Disposition', `attachment; filename="child-${childId}-monthly-report.pdf"`);
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Content-Length', pdfBuffer.length);
     
     response.send(pdfBuffer);
