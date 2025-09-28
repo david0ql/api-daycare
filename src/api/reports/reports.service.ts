@@ -140,7 +140,7 @@ export class ReportsService {
   }
 
   async generatePaymentAlertsReport(): Promise<Buffer> {
-    // Get children with payment alerts (you'll need to implement this logic based on your business rules)
+    // Get children with payment alerts (current state, not date-based)
     const childrenWithAlerts = await this.childrenRepository
       .createQueryBuilder('child')
       .leftJoinAndSelect('child.parentChildRelationships', 'pcr')
@@ -196,10 +196,10 @@ export class ReportsService {
   private async createPDFDocument(type: string, data: any): Promise<Buffer> {
     const fonts = {
       Roboto: {
-        normal: 'node_modules/pdfmake/build/vfs_fonts.js',
-        bold: 'node_modules/pdfmake/build/vfs_fonts.js',
-        italics: 'node_modules/pdfmake/build/vfs_fonts.js',
-        bolditalics: 'node_modules/pdfmake/build/vfs_fonts.js',
+        normal: join(process.cwd(), 'fonts', 'Roboto-Regular.ttf'),
+        bold: join(process.cwd(), 'fonts', 'Roboto-Medium.ttf'),
+        italics: join(process.cwd(), 'fonts', 'Roboto-Italic.ttf'),
+        bolditalics: join(process.cwd(), 'fonts', 'Roboto-MediumItalic.ttf'),
       },
     };
 

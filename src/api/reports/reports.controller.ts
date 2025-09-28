@@ -113,7 +113,7 @@ export class ReportsController {
     response.send(pdfBuffer);
   }
 
-  @Get('attendance/weekly')
+  @Post('attendance/weekly')
   @Roles('administrator', 'educator')
   @ApiOperation({ summary: 'Generate weekly attendance report PDF' })
   @ApiResponse({
@@ -128,16 +128,20 @@ export class ReportsController {
       },
     },
   })
-  async generateWeeklyAttendanceReport(@Res() response: Response): Promise<void> {
-    const startOfWeek = moment().startOf('week').format('YYYY-MM-DD');
-    const endOfWeek = moment().endOf('week').format('YYYY-MM-DD');
+  async generateWeeklyAttendanceReport(
+    @Res() response: Response,
+    @Body() attendanceReportDto?: AttendanceReportDto,
+  ): Promise<void> {
+    // Use provided dates or default to current week
+    const startDate = attendanceReportDto?.startDate || moment().startOf('week').format('YYYY-MM-DD');
+    const endDate = attendanceReportDto?.endDate || moment().endOf('week').format('YYYY-MM-DD');
     
-    const attendanceReportDto: AttendanceReportDto = {
-      startDate: startOfWeek,
-      endDate: endOfWeek,
+    const reportDto: AttendanceReportDto = {
+      startDate,
+      endDate,
     };
     
-    const pdfBuffer = await this.reportsService.generateAttendanceReport(attendanceReportDto);
+    const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto);
     
     response.setHeader('Content-Type', 'application/pdf');
     response.setHeader('Content-Disposition', 'attachment; filename="weekly-attendance-report.pdf"');
@@ -146,7 +150,7 @@ export class ReportsController {
     response.send(pdfBuffer);
   }
 
-  @Get('attendance/monthly')
+  @Post('attendance/monthly')
   @Roles('administrator', 'educator')
   @ApiOperation({ summary: 'Generate monthly attendance report PDF' })
   @ApiResponse({
@@ -161,16 +165,20 @@ export class ReportsController {
       },
     },
   })
-  async generateMonthlyAttendanceReport(@Res() response: Response): Promise<void> {
-    const startOfMonth = moment().startOf('month').format('YYYY-MM-DD');
-    const endOfMonth = moment().endOf('month').format('YYYY-MM-DD');
+  async generateMonthlyAttendanceReport(
+    @Res() response: Response,
+    @Body() attendanceReportDto?: AttendanceReportDto,
+  ): Promise<void> {
+    // Use provided dates or default to current month
+    const startDate = attendanceReportDto?.startDate || moment().startOf('month').format('YYYY-MM-DD');
+    const endDate = attendanceReportDto?.endDate || moment().endOf('month').format('YYYY-MM-DD');
     
-    const attendanceReportDto: AttendanceReportDto = {
-      startDate: startOfMonth,
-      endDate: endOfMonth,
+    const reportDto: AttendanceReportDto = {
+      startDate,
+      endDate,
     };
     
-    const pdfBuffer = await this.reportsService.generateAttendanceReport(attendanceReportDto);
+    const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto);
     
     response.setHeader('Content-Type', 'application/pdf');
     response.setHeader('Content-Disposition', 'attachment; filename="monthly-attendance-report.pdf"');
@@ -179,7 +187,7 @@ export class ReportsController {
     response.send(pdfBuffer);
   }
 
-  @Get('child/:childId/monthly')
+  @Post('child/:childId/monthly')
   @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Generate monthly child report PDF' })
   @ApiResponse({
@@ -197,17 +205,19 @@ export class ReportsController {
   async generateMonthlyChildReport(
     @Res() response: Response,
     @Param('childId', ParseIntPipe) childId: number,
+    @Body() childReportDto?: Omit<ChildReportDto, 'childId'>,
   ): Promise<void> {
-    const startOfMonth = moment().startOf('month').format('YYYY-MM-DD');
-    const endOfMonth = moment().endOf('month').format('YYYY-MM-DD');
+    // Use provided dates or default to current month
+    const startDate = childReportDto?.startDate || moment().startOf('month').format('YYYY-MM-DD');
+    const endDate = childReportDto?.endDate || moment().endOf('month').format('YYYY-MM-DD');
     
-    const childReportDto: ChildReportDto = {
+    const reportDto: ChildReportDto = {
       childId,
-      startDate: startOfMonth,
-      endDate: endOfMonth,
+      startDate,
+      endDate,
     };
     
-    const pdfBuffer = await this.reportsService.generateChildReport(childReportDto);
+    const pdfBuffer = await this.reportsService.generateChildReport(reportDto);
     
     response.setHeader('Content-Type', 'application/pdf');
     response.setHeader('Content-Disposition', `attachment; filename="child-${childId}-monthly-report.pdf"`);
