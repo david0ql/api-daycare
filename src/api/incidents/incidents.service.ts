@@ -13,7 +13,7 @@ import { UsersEntity } from 'src/entities/users.entity';
 import { PageDto } from 'src/dto/page.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
-import { FileUploadService } from '../attendance/services/file-upload.service';
+import { IncidentFileUploadService } from './services/incident-file-upload.service';
 
 @Injectable()
 export class IncidentsService {
@@ -29,7 +29,7 @@ export class IncidentsService {
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
     private readonly dataSource: DataSource,
-    private readonly fileUploadService: FileUploadService,
+        private readonly fileUploadService: IncidentFileUploadService,
   ) {}
 
   async create(
@@ -307,7 +307,7 @@ export class IncidentsService {
     incidentId: number,
     file: Express.Multer.File,
     currentUserId: number,
-  ): Promise<{ filename: string; filePath: string }> {
+  ): Promise<IncidentAttachmentsEntity> {
     // Verify incident exists
     const incident = await this.incidentsRepository.findOne({
       where: { id: incidentId },
@@ -317,13 +317,36 @@ export class IncidentsService {
       throw new NotFoundException('Incident not found');
     }
 
-    // Save file using FileUploadService
-    const { filename, filePath } = await this.fileUploadService.saveFile(
+    // Save file using IncidentFileUploadService
+    const { filename, filePath, fileSize, mimeType } = await this.fileUploadService.saveFile(
       file,
-      'incident-attachments',
-      'incident'
+      incidentId
     );
 
-    return { filename, filePath };
+    // Determine file type
+    const fileType = this.fileUploadService.getFileMimeTypeCategory(mimeType);
+
+    // Create attachment record in database
+    const attachment = this.incidentAttachmentsRepository.create({
+      incidentId,
+      filename,
+      filePath,
+      fileType,
+      uploadedBy: currentUserId,
+    });
+
+    const savedAttachment = await this.incidentAttachmentsRepository.save(attachment);
+
+    // Return the attachment with relations
+    const attachmentWithRelations = await this.incidentAttachmentsRepository.findOne({
+      where: { id: savedAttachment.id },
+      relations: ['uploadedBy2'],
+    });
+
+    if (!attachmentWithRelations) {
+      throw new Error('Failed to retrieve saved attachment');
+    }
+
+    return attachmentWithRelations;
   }
 }
