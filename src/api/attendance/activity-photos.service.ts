@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ActivityPhotosEntity } from 'src/entities/activity_photos.entity';
@@ -22,6 +22,10 @@ export class ActivityPhotosService {
     file: Express.Multer.File, 
     uploadedBy: number
   ) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
     const { filename, filePath } = await this.fileUploadService.saveFile(
       file, 
       'activity-photos',

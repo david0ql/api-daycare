@@ -13,6 +13,7 @@ import { UsersEntity } from 'src/entities/users.entity';
 import { PageDto } from 'src/dto/page.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
+import { FileUploadService } from '../attendance/services/file-upload.service';
 
 @Injectable()
 export class IncidentsService {
@@ -28,6 +29,7 @@ export class IncidentsService {
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
     private readonly dataSource: DataSource,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   async create(
@@ -299,5 +301,29 @@ export class IncidentsService {
     const pageMeta = new PageMetaDto({ pageOptionsDto, totalCount: total });
 
     return new PageDto(incidents, pageMeta);
+  }
+
+  async uploadAttachment(
+    incidentId: number,
+    file: Express.Multer.File,
+    currentUserId: number,
+  ): Promise<{ filename: string; filePath: string }> {
+    // Verify incident exists
+    const incident = await this.incidentsRepository.findOne({
+      where: { id: incidentId },
+    });
+
+    if (!incident) {
+      throw new NotFoundException('Incident not found');
+    }
+
+    // Save file using FileUploadService
+    const { filename, filePath } = await this.fileUploadService.saveFile(
+      file,
+      'incident-attachments',
+      'incident'
+    );
+
+    return { filename, filePath };
   }
 }

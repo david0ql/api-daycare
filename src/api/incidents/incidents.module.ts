@@ -7,6 +7,7 @@ import { IncidentTypesEntity } from 'src/entities/incident_types.entity';
 import { IncidentAttachmentsEntity } from 'src/entities/incident_attachments.entity';
 import { ChildrenEntity } from 'src/entities/children.entity';
 import { UsersEntity } from 'src/entities/users.entity';
+import { FileUploadService } from '../attendance/services/file-upload.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { UsersEntity } from 'src/entities/users.entity';
     ]),
   ],
   controllers: [IncidentsController],
-  providers: [IncidentsService],
+  providers: [IncidentsService, FileUploadService],
   exports: [IncidentsService],
 })
 export class IncidentsModule {}

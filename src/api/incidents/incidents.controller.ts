@@ -10,8 +10,12 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { IncidentsService } from './incidents.service';
 import { CreateIncidentDto } from './dto/create-incident.dto';
 import { UpdateIncidentDto } from './dto/update-incident.dto';
@@ -175,6 +179,49 @@ export class IncidentsController {
     @CurrentUser() currentUser: UsersEntity,
   ) {
     return this.incidentsService.markParentNotified(markParentNotifiedDto, currentUser.id);
+  }
+
+  @Post('upload-attachment')
+  @Roles(UserRoleEnum.ADMINISTRATOR, UserRoleEnum.EDUCATOR)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Upload incident attachment',
+    type: 'multipart/form-data',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+        incidentId: { type: 'number' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Upload attachment file for an incident' })
+  @ApiResponse({
+    status: 201,
+    description: 'File uploaded successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No file uploaded',
+  })
+  uploadAttachment(
+    @Body('incidentId') incidentId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() currentUser: UsersEntity,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    
+    return this.incidentsService.uploadAttachment(
+      parseInt(incidentId),
+      file,
+      currentUser.id
+    );
   }
 
   @Post('attachments')
