@@ -74,8 +74,19 @@ export class DocumentsController {
     status: 200,
     description: 'Document types retrieved successfully',
   })
-  getDocumentTypes() {
-    return this.documentsService.getDocumentTypes();
+  async getDocumentTypes() {
+    const documentTypes = await this.documentsService.getDocumentTypes();
+    return {
+      data: documentTypes,
+      meta: {
+        total: documentTypes.length,
+        page: 1,
+        take: documentTypes.length,
+        pageCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      },
+    };
   }
 
   @Get('types/with-count')
@@ -86,6 +97,17 @@ export class DocumentsController {
   })
   getDocumentTypesWithCount() {
     return this.documentsService.getDocumentTypesWithCount();
+  }
+
+  @Post('types/seed')
+  @Roles(UserRoleEnum.ADMINISTRATOR)
+  @ApiOperation({ summary: 'Seed document types (admin only)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Document types seeded successfully',
+  })
+  seedDocumentTypes() {
+    return this.documentsService.seedDocumentTypes();
   }
 
   @Get('expiring')

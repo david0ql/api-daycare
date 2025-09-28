@@ -38,8 +38,14 @@ export class FileValidationPipe implements PipeTransform {
     }
 
     // Validate file has content
-    if (!file.buffer || file.buffer.length === 0) {
+    // Check if file has buffer (memory storage) or path (disk storage)
+    if (file.buffer && file.buffer.length === 0) {
       throw new BadRequestException('File is empty');
+    }
+    
+    // For disk storage, we can't validate content here, but we can check if path exists
+    if (!file.buffer && !file.path) {
+      throw new BadRequestException('File is empty or invalid');
     }
 
     return file;

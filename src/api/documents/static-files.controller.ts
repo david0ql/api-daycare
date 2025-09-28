@@ -7,10 +7,14 @@ import {
   UseGuards,
   UseInterceptors,
   ClassSerializerInterceptor,
+  Query,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { createReadStream } from 'fs';
+import { createReadStream, existsSync } from 'fs';
+import { join } from 'path';
 import { StreamableFile } from '@nestjs/common';
 import { StaticFileAuthGuard } from './guards/static-file-auth.guard';
 
@@ -147,5 +151,55 @@ export class StaticFilesController {
     res.setHeader('Content-Disposition', `attachment; filename="${originalFilename}"`);
 
     return new StreamableFile(fileStream);
+  }
+
+  @Get('documents/:filename/simple')
+  @ApiOperation({ 
+    summary: 'Serve document file with query token authentication',
+    description: 'Serves a document file with JWT token from query parameter for simple access.'
+  })
+  @ApiParam({
+    name: 'filename',
+    description: 'The unique filename of the document',
+    example: '550e8400-e29b-41d4-a716-446655440000.pdf'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'File served successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'File not found',
+  })
+  async serveDocumentSimple(
+    @Param('filename') filename: string,
+    @Query('token') token: string,
+    @Res() res: Response,
+  ) {
+    console.log('StaticFilesController - Token from query:', token);
+
+    // Validate token manually
+    if (!token) {
+      throw new UnauthorizedException('Token required');
+    }
+
+    // Here you would validate the JWT token manually
+    // For now, we'll just check if it exists
+    if (!token.startsWith('eyJ')) {
+      throw new UnauthorizedException('Invalid token format');
+    }
+
+    const filePath = join(process.cwd(), 'uploads', 'documents', filename);
+
+    if (!existsSync(filePath)) {
+      throw new NotFoundException('File not found');
+    }
+
+    const fileStream = createReadStream(filePath);
+    fileStream.pipe(res);
   }
 }

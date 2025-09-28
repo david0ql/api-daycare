@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -75,6 +75,10 @@ export class DocumentsService {
     currentUserId: number,
     currentUserRole: string,
   ): Promise<PageDto<DocumentsEntity>> {
+    console.log('🔍 DocumentsService.findAll - currentUserId:', currentUserId);
+    console.log('🔍 DocumentsService.findAll - currentUserRole:', currentUserRole);
+    console.log('🔍 DocumentsService.findAll - pageOptionsDto:', pageOptionsDto);
+
     const queryBuilder = this.documentsRepository
       .createQueryBuilder('document')
       .leftJoinAndSelect('document.child', 'child')
@@ -92,10 +96,15 @@ export class DocumentsService {
       .orderBy('document.createdAt', 'DESC');
 
     const total = await queryBuilder.getCount();
+    console.log('🔍 DocumentsService.findAll - total count:', total);
+    
     const documents = await queryBuilder
       .skip(pageOptionsDto.skip)
       .take(pageOptionsDto.take)
       .getMany();
+    
+    console.log('🔍 DocumentsService.findAll - documents found:', documents.length);
+    console.log('🔍 DocumentsService.findAll - documents:', documents);
 
     // Add expiration information to each document
     const documentsWithExpiration = documents.map(doc => ({
@@ -210,6 +219,62 @@ export class DocumentsService {
       ...type,
       documentCount: type.documents.length,
     }));
+  }
+
+  async seedDocumentTypes(): Promise<DocumentTypesEntity[]> {
+    // Check if document types already exist
+    const existingTypes = await this.documentTypesRepository.find();
+    if (existingTypes.length > 0) {
+      return existingTypes;
+    }
+
+    // Insert document types
+    const documentTypes = [
+      {
+        name: 'birth_certificate',
+        description: 'Birth certificate document',
+        retentionDays: 2555, // 7 years
+      },
+      {
+        name: 'vaccination_record',
+        description: 'Vaccination records',
+        retentionDays: 1825, // 5 years
+      },
+      {
+        name: 'authorization_form',
+        description: 'Authorization forms',
+        retentionDays: 365, // 1 year
+      },
+      {
+        name: 'medical_record',
+        description: 'Medical records and prescriptions',
+        retentionDays: 1825, // 5 years
+      },
+      {
+        name: 'emergency_contact',
+        description: 'Emergency contact information',
+        retentionDays: 365, // 1 year
+      },
+      {
+        name: 'insurance_card',
+        description: 'Insurance card copy',
+        retentionDays: 365, // 1 year
+      },
+      {
+        name: 'other',
+        description: 'Other documents',
+        retentionDays: 365, // 1 year
+      },
+    ];
+
+    const createdTypes: DocumentTypesEntity[] = [];
+    for (const docType of documentTypes) {
+      const documentType = this.documentTypesRepository.create(docType);
+      const saved = await this.documentTypesRepository.save(documentType);
+      createdTypes.push(saved);
+    }
+
+    return createdTypes;
   }
 
   async getDocumentsByChild(
@@ -374,6 +439,23 @@ export class DocumentsService {
       throw new NotFoundException('Document type not found');
     }
 
+    // Check if document type can be uploaded multiple times (only 'other' type allows multiple uploads)
+    const canUploadMultiple = documentType.name.toLowerCase() === 'other';
+    
+    if (!canUploadMultiple) {
+      // Check if this document type already exists for this child
+      const existingDocument = await this.documentsRepository.findOne({
+        where: {
+          childId,
+          documentTypeId,
+        },
+      });
+
+      if (existingDocument) {
+        throw new BadRequestException(`Ya existe un documento de tipo "${documentType.name}" para este niño. Solo se permite un documento por tipo (excepto "Otros").`);
+      }
+    }
+
     // Save file to disk
     const fileInfo = await this.fileUploadService.saveFile(file, childId, documentTypeId);
 
@@ -398,7 +480,9 @@ export class DocumentsService {
       expiresAt: expirationDate,
     });
 
+    console.log('🔍 DocumentsService.uploadDocument - saving document:', newDocument);
     const savedDocument = await this.documentsRepository.save(newDocument);
+    console.log('🔍 DocumentsService.uploadDocument - saved document:', savedDocument);
 
     // Return document with relations
     const retrievedDocument = await this.documentsRepository.findOne({
@@ -410,6 +494,7 @@ export class DocumentsService {
       throw new NotFoundException('Failed to retrieve created document');
     }
 
+    console.log('🔍 DocumentsService.uploadDocument - retrieved document:', retrievedDocument);
     return retrievedDocument;
   }
 
