@@ -51,7 +51,7 @@ export class DailyObservationsController {
   }
 
   @Get('all')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get all daily observations with pagination' })
   @ApiResponse({
     status: 200,
@@ -60,7 +60,8 @@ export class DailyObservationsController {
   async findAll(
     @Query('page') page?: string,
     @Query('take') take?: string,
-    @Query('order') order?: string
+    @Query('order') order?: string,
+    @CurrentUser() currentUser?: UsersEntity,
   ): Promise<PageDto<DailyObservationsEntity>> {
     // Create PageOptionsDto manually with proper defaults
     const pageOptionsDto: PageOptionsDto = {
@@ -72,7 +73,11 @@ export class DailyObservationsController {
       }
     };
     
-    return this.dailyObservationsService.findAll(pageOptionsDto);
+    return this.dailyObservationsService.findAll(
+      pageOptionsDto,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Get('attendance/:attendanceId')
@@ -95,20 +100,42 @@ export class DailyObservationsController {
     status: 200,
     description: 'Daily observations for child retrieved successfully',
   })
-  findByChild(@Param('childId', ParseIntPipe) childId: number) {
-    return this.dailyObservationsService.findByChild(childId);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
+  findByChild(
+    @Param('childId', ParseIntPipe) childId: number,
+    @CurrentUser() currentUser?: UsersEntity,
+  ) {
+    return this.dailyObservationsService.findByChild(
+      childId,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Get(':id')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get a specific daily observation by ID' })
   @ApiParam({ name: 'id', description: 'Daily observation ID' })
   @ApiResponse({
     status: 200,
     description: 'Daily observation retrieved successfully',
   })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.dailyObservationsService.findOne(id);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this observation',
+  })
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser?: UsersEntity,
+  ) {
+    return this.dailyObservationsService.findOne(
+      id,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Patch(':id')

@@ -22,6 +22,8 @@ import { ChildReportDto } from './dto/child-report.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { UsersEntity } from 'src/entities/users.entity';
 
 @ApiTags('Reports')
 @Controller('reports')
@@ -76,13 +78,22 @@ export class ReportsController {
       },
     },
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
   async generateChildReport(
     @Res() response: Response,
     @Param('childId', ParseIntPipe) childId: number,
     @Body() childReportDto: Omit<ChildReportDto, 'childId'>,
+    @CurrentUser() currentUser: UsersEntity,
   ): Promise<void> {
     const fullDto = { ...childReportDto, childId };
-    const pdfBuffer = await this.reportsService.generateChildReport(fullDto);
+    const pdfBuffer = await this.reportsService.generateChildReport(
+      fullDto,
+      currentUser.id,
+      currentUser.role.name,
+    );
     
     const { startDate, endDate } = childReportDto;
     const filename = `child-${childId}-report-${startDate}-to-${endDate}.pdf`;

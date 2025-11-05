@@ -8,6 +8,7 @@ import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { FileUploadService } from './services/file-upload.service';
+import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class ActivityPhotosService {
@@ -15,6 +16,7 @@ export class ActivityPhotosService {
     @InjectRepository(ActivityPhotosEntity)
     private readonly activityPhotosRepository: Repository<ActivityPhotosEntity>,
     private readonly fileUploadService: FileUploadService,
+    private readonly parentFilterService: ParentFilterService,
   ) {}
 
   async create(
@@ -42,15 +44,28 @@ export class ActivityPhotosService {
     return await this.activityPhotosRepository.save(photo);
   }
 
-  async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<ActivityPhotosEntity>> {
+  async findAll(
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<ActivityPhotosEntity>> {
     const queryBuilder = this.activityPhotosRepository
       .createQueryBuilder('activity_photos')
       .leftJoinAndSelect('activity_photos.child', 'child')
       .leftJoinAndSelect('activity_photos.attendance', 'attendance')
       .leftJoinAndSelect('activity_photos.uploadedBy2', 'uploadedBy2')
-      .orderBy('activity_photos.createdAt', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+      .orderBy('activity_photos.createdAt', pageOptionsDto.order);
+
+    // If user is parent, only show photos for their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.andWhere('activity_photos.childId IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const itemCount = await queryBuilder.getCount();
     const { entities } = await queryBuilder.getRawAndEntities();
@@ -68,7 +83,19 @@ export class ActivityPhotosService {
     });
   }
 
-  async findByChild(childId: number) {
+  async findByChild(
+    childId: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ) {
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
+    }
+
     return await this.activityPhotosRepository.find({
       where: { childId },
       relations: ['child', 'attendance', 'uploadedBy2'],
@@ -76,7 +103,11 @@ export class ActivityPhotosService {
     });
   }
 
-  async findOne(id: number) {
+  async findOne(
+    id: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ) {
     const photo = await this.activityPhotosRepository.findOne({
       where: { id },
       relations: ['child', 'attendance', 'uploadedBy2'],
@@ -84,6 +115,14 @@ export class ActivityPhotosService {
 
     if (!photo) {
       throw new NotFoundException(`Activity photo with ID ${id} not found`);
+    }
+
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, photo.childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this photo');
+      }
     }
 
     return photo;

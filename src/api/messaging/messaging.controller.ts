@@ -72,7 +72,11 @@ export class MessagingController {
     @Query() pageOptionsDto: PageOptionsDto,
     @CurrentUser() currentUser: UsersEntity,
   ) {
-    return this.messagingService.findAllThreads(pageOptionsDto, currentUser.id);
+    return this.messagingService.findAllThreads(
+      pageOptionsDto,
+      currentUser.id,
+      currentUser.role.name,
+    );
   }
 
   @Get('threads/:id')
@@ -85,11 +89,15 @@ export class MessagingController {
     status: 404,
     description: 'Message thread not found',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this message thread',
+  })
   findThreadById(
     @Param('id') id: string,
     @CurrentUser() currentUser: UsersEntity,
   ) {
-    return this.messagingService.findThreadById(+id, currentUser.id);
+    return this.messagingService.findThreadById(+id, currentUser.id, currentUser.role.name);
   }
 
   @Post('messages/mark-read')

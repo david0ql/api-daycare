@@ -7,6 +7,7 @@ import { MessagesEntity } from 'src/entities/messages.entity';
 import { MessageRecipientsEntity } from 'src/entities/message_recipients.entity';
 import { ChildrenEntity } from 'src/entities/children.entity';
 import { UsersEntity } from 'src/entities/users.entity';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UsersEntity } from 'src/entities/users.entity';
       ChildrenEntity,
       UsersEntity,
     ]),
+    SharedModule,
   ],
   controllers: [MessagingController],
   providers: [MessagingService],

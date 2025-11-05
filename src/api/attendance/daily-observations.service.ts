@@ -7,12 +7,14 @@ import { UpdateDailyObservationDto } from './dto/update-daily-observation.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
+import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class DailyObservationsService {
   constructor(
     @InjectRepository(DailyObservationsEntity)
     private readonly dailyObservationsRepository: Repository<DailyObservationsEntity>,
+    private readonly parentFilterService: ParentFilterService,
   ) {}
 
   async create(createDailyObservationDto: CreateDailyObservationDto, createdBy: number) {
@@ -24,15 +26,28 @@ export class DailyObservationsService {
     return await this.dailyObservationsRepository.save(observation);
   }
 
-  async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<DailyObservationsEntity>> {
+  async findAll(
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<DailyObservationsEntity>> {
     const queryBuilder = this.dailyObservationsRepository
       .createQueryBuilder('daily_observations')
       .leftJoinAndSelect('daily_observations.child', 'child')
       .leftJoinAndSelect('daily_observations.attendance', 'attendance')
       .leftJoinAndSelect('daily_observations.createdBy2', 'createdBy2')
-      .orderBy('daily_observations.createdAt', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+      .orderBy('daily_observations.createdAt', pageOptionsDto.order);
+
+    // If user is parent, only show observations for their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.andWhere('daily_observations.childId IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const itemCount = await queryBuilder.getCount();
     const { entities } = await queryBuilder.getRawAndEntities();
@@ -50,7 +65,19 @@ export class DailyObservationsService {
     });
   }
 
-  async findByChild(childId: number) {
+  async findByChild(
+    childId: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ) {
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
+    }
+
     return await this.dailyObservationsRepository.find({
       where: { childId },
       relations: ['child', 'attendance', 'createdBy2'],
@@ -58,7 +85,11 @@ export class DailyObservationsService {
     });
   }
 
-  async findOne(id: number) {
+  async findOne(
+    id: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ) {
     const observation = await this.dailyObservationsRepository.findOne({
       where: { id },
       relations: ['child', 'attendance', 'createdBy2'],
@@ -66,6 +97,14 @@ export class DailyObservationsService {
 
     if (!observation) {
       throw new NotFoundException(`Daily observation with ID ${id} not found`);
+    }
+
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, observation.childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this observation');
+      }
     }
 
     return observation;

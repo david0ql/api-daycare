@@ -63,7 +63,7 @@ export class ActivityPhotosController {
   }
 
   @Get('all')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get all activity photos with pagination' })
   @ApiResponse({
     status: 200,
@@ -72,7 +72,8 @@ export class ActivityPhotosController {
   async findAll(
     @Query('page') page?: string,
     @Query('take') take?: string,
-    @Query('order') order?: string
+    @Query('order') order?: string,
+    @CurrentUser() currentUser?: UsersEntity,
   ): Promise<PageDto<ActivityPhotosEntity>> {
     // Create PageOptionsDto manually with proper defaults
     const pageOptionsDto: PageOptionsDto = {
@@ -84,7 +85,11 @@ export class ActivityPhotosController {
       }
     };
     
-    return this.activityPhotosService.findAll(pageOptionsDto);
+    return this.activityPhotosService.findAll(
+      pageOptionsDto,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Get('attendance/:attendanceId')
@@ -107,20 +112,42 @@ export class ActivityPhotosController {
     status: 200,
     description: 'Activity photos for child retrieved successfully',
   })
-  findByChild(@Param('childId', ParseIntPipe) childId: number) {
-    return this.activityPhotosService.findByChild(childId);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
+  findByChild(
+    @Param('childId', ParseIntPipe) childId: number,
+    @CurrentUser() currentUser?: UsersEntity,
+  ) {
+    return this.activityPhotosService.findByChild(
+      childId,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Get(':id')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get a specific activity photo by ID' })
   @ApiParam({ name: 'id', description: 'Activity photo ID' })
   @ApiResponse({
     status: 200,
     description: 'Activity photo retrieved successfully',
   })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.activityPhotosService.findOne(id);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this photo',
+  })
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser?: UsersEntity,
+  ) {
+    return this.activityPhotosService.findOne(
+      id,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Patch(':id')

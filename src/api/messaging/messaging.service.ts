@@ -12,6 +12,7 @@ import { UsersEntity } from 'src/entities/users.entity';
 import { PageDto } from 'src/dto/page.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
+import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class MessagingService {
@@ -27,6 +28,7 @@ export class MessagingService {
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
     private readonly dataSource: DataSource,
+    private readonly parentFilterService: ParentFilterService,
   ) {}
 
   async createMessageThread(
@@ -179,6 +181,7 @@ export class MessagingService {
   async findAllThreads(
     pageOptionsDto: PageOptionsDto,
     currentUserId: number,
+    currentUserRole?: string,
   ): Promise<PageDto<MessageThreadsEntity>> {
     const queryBuilder = this.messageThreadsRepository
       .createQueryBuilder('thread')
@@ -188,9 +191,19 @@ export class MessagingService {
       .leftJoinAndSelect('messages.sender', 'sender')
       .leftJoinAndSelect('messages.messageRecipients', 'messageRecipients')
       .leftJoinAndSelect('messageRecipients.recipient', 'recipient')
-      .where('thread.createdBy = :userId OR messageRecipients.recipientId = :userId', { userId: currentUserId })
-      .orderBy('thread.updatedAt', 'DESC')
-      .addOrderBy('messages.createdAt', 'ASC');
+      .where('thread.createdBy = :userId OR messageRecipients.recipientId = :userId', { userId: currentUserId });
+
+    // If user is parent, only show threads related to their children
+    if (currentUserRole === 'parent') {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        // Parent has no children, return empty result
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.andWhere('thread.childId IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.orderBy('thread.updatedAt', 'DESC').addOrderBy('messages.createdAt', 'ASC');
 
     const total = await queryBuilder.getCount();
     const threads = await queryBuilder
@@ -221,7 +234,11 @@ export class MessagingService {
     return new PageDto(threadsWithUnreadCount, pageMeta);
   }
 
-  async findThreadById(id: number, currentUserId: number): Promise<MessageThreadsEntity> {
+  async findThreadById(
+    id: number,
+    currentUserId: number,
+    currentUserRole?: string,
+  ): Promise<MessageThreadsEntity> {
     const thread = await this.messageThreadsRepository
       .createQueryBuilder('thread')
       .leftJoinAndSelect('thread.child', 'child')
@@ -237,6 +254,14 @@ export class MessagingService {
 
     if (!thread) {
       throw new NotFoundException('Message thread not found');
+    }
+
+    // If user is parent, verify they have access to this child's thread
+    if (currentUserRole === 'parent') {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, thread.childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this message thread');
+      }
     }
 
     return thread;

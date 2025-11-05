@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import moment from 'moment';
@@ -13,6 +13,7 @@ import { DailyObservationsEntity } from 'src/entities/daily_observations.entity'
 import { ActivityPhotosEntity } from 'src/entities/activity_photos.entity';
 import { AttendanceReportDto } from './dto/attendance-report.dto';
 import { ChildReportDto } from './dto/child-report.dto';
+import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class ReportsService {
@@ -66,6 +67,7 @@ export class ReportsService {
     private readonly observationsRepository: Repository<DailyObservationsEntity>,
     @InjectRepository(ActivityPhotosEntity)
     private readonly photosRepository: Repository<ActivityPhotosEntity>,
+    private readonly parentFilterService: ParentFilterService,
   ) {}
 
   async generateAttendanceReport(attendanceReportDto: AttendanceReportDto): Promise<Buffer> {
@@ -84,7 +86,11 @@ export class ReportsService {
     return this.createPDFDocument('attendance', { attendances, startDate, endDate });
   }
 
-  async generateChildReport(childReportDto: ChildReportDto): Promise<Buffer> {
+  async generateChildReport(
+    childReportDto: ChildReportDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<Buffer> {
     const { childId, startDate, endDate } = childReportDto;
 
     const child = await this.childrenRepository.findOne({
@@ -94,6 +100,14 @@ export class ReportsService {
 
     if (!child) {
       throw new NotFoundException('Child not found');
+    }
+
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
     }
 
     const attendances = await this.attendanceRepository
