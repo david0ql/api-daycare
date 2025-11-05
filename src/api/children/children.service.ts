@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChildrenEntity } from 'src/entities/children.entity';
@@ -15,6 +15,7 @@ import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { SearchDto } from 'src/dto/search.dto';
+import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class ChildrenService {
@@ -31,6 +32,7 @@ export class ChildrenService {
     private readonly medicalInformationRepository: Repository<MedicalInformationEntity>,
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
+    private readonly parentFilterService: ParentFilterService,
   ) {}
 
   async create(createChildDto: CreateChildDto): Promise<ChildrenEntity> {
@@ -90,12 +92,26 @@ export class ChildrenService {
     return savedChild;
   }
 
-  async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<ChildrenEntity>> {
+  async findAll(
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<ChildrenEntity>> {
     const queryBuilder = this.childrenRepository
       .createQueryBuilder('child')
-      .orderBy('child.createdAt', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+      .orderBy('child.createdAt', pageOptionsDto.order);
+
+    // If user is parent, only show their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        // Parent has no children, return empty result
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.where('child.id IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const [children, totalCount] = await queryBuilder.getManyAndCount();
 
@@ -104,7 +120,11 @@ export class ChildrenService {
     return new PageDto(children, pageMetaDto);
   }
 
-  async findOne(id: number): Promise<ChildrenEntity> {
+  async findOne(
+    id: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<ChildrenEntity> {
     const child = await this.childrenRepository.findOne({
       where: { id },
       relations: [
@@ -118,6 +138,14 @@ export class ChildrenService {
 
     if (!child) {
       throw new NotFoundException(`Child with ID ${id} not found`);
+    }
+
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, id);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
     }
 
     return child;
@@ -204,16 +232,31 @@ export class ChildrenService {
     await this.childrenRepository.remove(child);
   }
 
-  async searchByWord(searchDto: SearchDto, pageOptionsDto: PageOptionsDto): Promise<PageDto<ChildrenEntity>> {
+  async searchByWord(
+    searchDto: SearchDto,
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<ChildrenEntity>> {
     const queryBuilder = this.childrenRepository
       .createQueryBuilder('child')
       .orderBy('child.createdAt', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take)
       .where('child.firstName LIKE :searchWord', { searchWord: `%${searchDto.searchWord}%` })
       .orWhere('child.lastName LIKE :searchWord', { searchWord: `%${searchDto.searchWord}%` })
       .orWhere('child.birthCity LIKE :searchWord', { searchWord: `%${searchDto.searchWord}%` })
       .orWhere('child.address LIKE :searchWord', { searchWord: `%${searchDto.searchWord}%` });
+
+    // If user is parent, only search within their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        // Parent has no children, return empty result
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.andWhere('child.id IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const [children, totalCount] = await queryBuilder.getManyAndCount();
 

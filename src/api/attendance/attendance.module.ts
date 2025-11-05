@@ -18,6 +18,7 @@ import { AuthorizedPickupPersonsEntity } from 'src/entities/authorized_pickup_pe
 import { UsersEntity } from 'src/entities/users.entity';
 import { FileUploadService } from './services/file-upload.service';
 import { StaticFilesController } from './static-files.controller';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { StaticFilesController } from './static-files.controller';
     MulterModule.register({
       dest: './uploads/activity-photos',
     }),
+    SharedModule,
   ],
   controllers: [
     AttendanceController,

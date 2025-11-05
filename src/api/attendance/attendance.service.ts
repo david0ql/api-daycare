@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DailyAttendanceEntity } from 'src/entities/daily_attendance.entity';
@@ -12,6 +12,7 @@ import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { SearchDto } from 'src/dto/search.dto';
+import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class AttendanceService {
@@ -22,6 +23,7 @@ export class AttendanceService {
     private readonly childrenRepository: Repository<ChildrenEntity>,
     @InjectRepository(AuthorizedPickupPersonsEntity)
     private readonly authorizedPickupRepository: Repository<AuthorizedPickupPersonsEntity>,
+    private readonly parentFilterService: ParentFilterService,
   ) {}
 
   async create(createAttendanceDto: CreateAttendanceDto, createdBy: number): Promise<DailyAttendanceEntity> {
@@ -79,26 +81,42 @@ export class AttendanceService {
     return this.attendanceRepository.save(attendance);
   }
 
-  async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<DailyAttendanceEntity>> {
+  async findAll(
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<DailyAttendanceEntity>> {
     const queryBuilder = this.attendanceRepository
       .createQueryBuilder('attendance')
       .leftJoinAndSelect('attendance.child', 'child')
       .leftJoinAndSelect('attendance.deliveredBy2', 'deliveredBy')
       .leftJoinAndSelect('attendance.pickedUpBy2', 'pickedUpBy')
       .leftJoinAndSelect('attendance.createdBy2', 'createdBy')
-      .orderBy('attendance.attendanceDate', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+      .orderBy('attendance.attendanceDate', pageOptionsDto.order);
+
+    // If user is parent, only show attendance for their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.andWhere('attendance.childId IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const [attendances, totalCount] = await queryBuilder.getManyAndCount();
-
 
     const pageMetaDto = new PageMetaDto({ totalCount, pageOptionsDto });
 
     return new PageDto(attendances, pageMetaDto);
   }
 
-  async findOne(id: number): Promise<DailyAttendanceEntity> {
+  async findOne(
+    id: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<DailyAttendanceEntity> {
     const attendance = await this.attendanceRepository.findOne({
       where: { id },
       relations: ['child', 'deliveredBy2', 'pickedUpBy2', 'createdBy2', 'updatedBy2'],
@@ -106,6 +124,14 @@ export class AttendanceService {
 
     if (!attendance) {
       throw new NotFoundException(`Attendance with ID ${id} not found`);
+    }
+
+    // If user is parent, verify they have access to this child's attendance
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, attendance.childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this attendance record');
+      }
     }
 
     console.log('🔍 Backend - Attendance findOne - attendance:', attendance);
@@ -228,16 +254,31 @@ export class AttendanceService {
     return new PageDto(attendances, pageMetaDto);
   }
 
-  async findByDateRange(startDate: string, endDate: string, pageOptionsDto: PageOptionsDto): Promise<PageDto<DailyAttendanceEntity>> {
+  async findByDateRange(
+    startDate: string,
+    endDate: string,
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<DailyAttendanceEntity>> {
     const queryBuilder = this.attendanceRepository
       .createQueryBuilder('attendance')
       .leftJoinAndSelect('attendance.child', 'child')
       .leftJoinAndSelect('attendance.deliveredBy2', 'deliveredBy')
       .leftJoinAndSelect('attendance.pickedUpBy2', 'pickedUpBy')
       .where('attendance.attendanceDate BETWEEN :startDate AND :endDate', { startDate, endDate })
-      .orderBy('attendance.attendanceDate', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+      .orderBy('attendance.attendanceDate', pageOptionsDto.order);
+
+    // If user is parent, only show attendance for their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.andWhere('attendance.childId IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const [attendances, totalCount] = await queryBuilder.getManyAndCount();
 
@@ -246,7 +287,20 @@ export class AttendanceService {
     return new PageDto(attendances, pageMetaDto);
   }
 
-  async findByChild(childId: number, pageOptionsDto: PageOptionsDto): Promise<PageDto<DailyAttendanceEntity>> {
+  async findByChild(
+    childId: number,
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<DailyAttendanceEntity>> {
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
+    }
+
     const queryBuilder = this.attendanceRepository
       .createQueryBuilder('attendance')
       .leftJoinAndSelect('attendance.child', 'child')
@@ -264,22 +318,51 @@ export class AttendanceService {
     return new PageDto(attendances, pageMetaDto);
   }
 
-  async getTodayAttendance(): Promise<DailyAttendanceEntity[]> {
+  async getTodayAttendance(
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<DailyAttendanceEntity[]> {
     const today = new Date().toISOString().split('T')[0];
 
-    return this.attendanceRepository.find({
-      where: { attendanceDate: today },
-      relations: ['child', 'deliveredBy2', 'pickedUpBy2'],
-      order: { checkInTime: 'ASC' },
-    });
+    const queryBuilder = this.attendanceRepository
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.child', 'child')
+      .leftJoinAndSelect('attendance.deliveredBy2', 'deliveredBy')
+      .leftJoinAndSelect('attendance.pickedUpBy2', 'pickedUpBy')
+      .where('attendance.attendanceDate = :today', { today })
+      .orderBy('attendance.checkInTime', 'ASC');
+
+    // If user is parent, only show attendance for their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        return [];
+      }
+      queryBuilder.andWhere('attendance.childId IN (:...childIds)', { childIds });
+    }
+
+    return queryBuilder.getMany();
   }
 
-  async getAttendanceStatus(childId: number, date?: string): Promise<{
+  async getAttendanceStatus(
+    childId: number,
+    date?: string,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<{
     isPresent: boolean;
     isCheckedIn: boolean;
     isCheckedOut: boolean;
     attendance?: DailyAttendanceEntity;
   }> {
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
+    }
+
     const attendanceDate = date || new Date().toISOString().split('T')[0];
 
     const attendance = await this.attendanceRepository.findOne({

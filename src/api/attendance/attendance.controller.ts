@@ -83,25 +83,30 @@ export class AttendanceController {
   }
 
   @Get()
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get all attendance records with pagination' })
   @ApiResponse({
     status: 200,
     description: 'Attendance records retrieved successfully',
   })
-  async findAll(@Query() pageOptionsDto: PageOptionsDto): Promise<PageDto<DailyAttendanceEntity>> {
-    return this.attendanceService.findAll(pageOptionsDto);
+  async findAll(
+    @Query() pageOptionsDto: PageOptionsDto,
+    @CurrentUser() currentUser: UsersEntity,
+  ): Promise<PageDto<DailyAttendanceEntity>> {
+    return this.attendanceService.findAll(pageOptionsDto, currentUser.id, currentUser.role.name);
   }
 
   @Get('today')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get today\'s attendance records' })
   @ApiResponse({
     status: 200,
     description: 'Today\'s attendance records retrieved successfully',
   })
-  async getTodayAttendance(): Promise<DailyAttendanceEntity[]> {
-    return this.attendanceService.getTodayAttendance();
+  async getTodayAttendance(
+    @CurrentUser() currentUser: UsersEntity,
+  ): Promise<DailyAttendanceEntity[]> {
+    return this.attendanceService.getTodayAttendance(currentUser.id, currentUser.role.name);
   }
 
   @Get('search')
@@ -119,7 +124,7 @@ export class AttendanceController {
   }
 
   @Get('date-range')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get attendance records by date range' })
   @ApiQuery({ name: 'startDate', description: 'Start date (YYYY-MM-DD)', example: '2024-01-01' })
   @ApiQuery({ name: 'endDate', description: 'End date (YYYY-MM-DD)', example: '2024-01-31' })
@@ -131,8 +136,9 @@ export class AttendanceController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query() pageOptionsDto: PageOptionsDto,
+    @CurrentUser() currentUser: UsersEntity,
   ): Promise<PageDto<DailyAttendanceEntity>> {
-    return this.attendanceService.findByDateRange(startDate, endDate, pageOptionsDto);
+    return this.attendanceService.findByDateRange(startDate, endDate, pageOptionsDto, currentUser.id, currentUser.role.name);
   }
 
   @Get('child/:childId')
@@ -143,11 +149,16 @@ export class AttendanceController {
     status: 200,
     description: 'Child attendance records retrieved successfully',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
   async findByChild(
     @Param('childId', ParseIntPipe) childId: number,
     @Query() pageOptionsDto: PageOptionsDto,
+    @CurrentUser() currentUser: UsersEntity,
   ): Promise<PageDto<DailyAttendanceEntity>> {
-    return this.attendanceService.findByChild(childId, pageOptionsDto);
+    return this.attendanceService.findByChild(childId, pageOptionsDto, currentUser.id, currentUser.role.name);
   }
 
   @Get('status/:childId')
@@ -168,16 +179,26 @@ export class AttendanceController {
       },
     },
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
   async getAttendanceStatus(
     @Param('childId', ParseIntPipe) childId: number,
     @Query('date') date?: string,
+    @CurrentUser() currentUser?: UsersEntity,
   ): Promise<{
     isPresent: boolean;
     isCheckedIn: boolean;
     isCheckedOut: boolean;
     attendance?: DailyAttendanceEntity;
   }> {
-    return this.attendanceService.getAttendanceStatus(childId, date);
+    return this.attendanceService.getAttendanceStatus(
+      childId,
+      date,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Get(':id')
@@ -192,8 +213,15 @@ export class AttendanceController {
     status: 404,
     description: 'Attendance record not found',
   })
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<DailyAttendanceEntity> {
-    return this.attendanceService.findOne(id);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this attendance record',
+  })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser: UsersEntity,
+  ): Promise<DailyAttendanceEntity> {
+    return this.attendanceService.findOne(id, currentUser.id, currentUser.role.name);
   }
 
   @Patch(':id')

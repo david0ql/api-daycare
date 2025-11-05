@@ -31,6 +31,8 @@ import { ChildrenEntity } from 'src/entities/children.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { UsersEntity } from 'src/entities/users.entity';
 
 @ApiTags('Children')
 @Controller('children')
@@ -71,8 +73,11 @@ export class ChildrenController {
     description: 'Children retrieved successfully',
     type: [ChildResponseDto],
   })
-  async findAll(@Query() pageOptionsDto: PageOptionsDto): Promise<PageDto<ChildrenEntity>> {
-    return this.childrenService.findAll(pageOptionsDto);
+  async findAll(
+    @Query() pageOptionsDto: PageOptionsDto,
+    @CurrentUser() currentUser: UsersEntity,
+  ): Promise<PageDto<ChildrenEntity>> {
+    return this.childrenService.findAll(pageOptionsDto, currentUser.id, currentUser.role.name);
   }
 
   @Get('search')
@@ -86,8 +91,9 @@ export class ChildrenController {
   async searchByWord(
     @Query() pageOptionsDto: PageOptionsDto,
     @Body() searchDto: SearchDto,
+    @CurrentUser() currentUser: UsersEntity,
   ): Promise<PageDto<ChildrenEntity>> {
-    return this.childrenService.searchByWord(searchDto, pageOptionsDto);
+    return this.childrenService.searchByWord(searchDto, pageOptionsDto, currentUser.id, currentUser.role.name);
   }
 
   @Get('age-range')
@@ -145,8 +151,15 @@ export class ChildrenController {
     status: 404,
     description: 'Child not found',
   })
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<ChildrenEntity> {
-    return this.childrenService.findOne(id);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser: UsersEntity,
+  ): Promise<ChildrenEntity> {
+    return this.childrenService.findOne(id, currentUser.id, currentUser.role.name);
   }
 
   @Get(':id/age')
@@ -164,8 +177,11 @@ export class ChildrenController {
       },
     },
   })
-  async getChildAge(@Param('id', ParseIntPipe) id: number): Promise<{ years: number; months: number }> {
-    const child = await this.childrenService.findOne(id);
+  async getChildAge(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser: UsersEntity,
+  ): Promise<{ years: number; months: number }> {
+    const child = await this.childrenService.findOne(id, currentUser.id, currentUser.role.name);
     return this.childrenService.calculateAge(child.birthDate);
   }
 

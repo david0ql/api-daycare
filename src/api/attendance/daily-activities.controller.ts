@@ -53,7 +53,7 @@ export class DailyActivitiesController {
   }
 
   @Get('all')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get all daily activities with pagination' })
   @ApiResponse({
     status: 200,
@@ -62,7 +62,8 @@ export class DailyActivitiesController {
   async findAll(
     @Query('page') page?: string,
     @Query('take') take?: string,
-    @Query('order') order?: string
+    @Query('order') order?: string,
+    @CurrentUser() currentUser?: UsersEntity,
   ): Promise<PageDto<DailyActivitiesEntity>> {
     // Create PageOptionsDto manually with proper defaults
     const pageOptionsDto: PageOptionsDto = {
@@ -74,7 +75,11 @@ export class DailyActivitiesController {
       }
     };
     
-    return this.dailyActivitiesService.findAll(pageOptionsDto);
+    return this.dailyActivitiesService.findAll(
+      pageOptionsDto,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
 
@@ -98,20 +103,42 @@ export class DailyActivitiesController {
     status: 200,
     description: 'Daily activities for child retrieved successfully',
   })
-  findByChild(@Param('childId', ParseIntPipe) childId: number) {
-    return this.dailyActivitiesService.findByChild(childId);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
+  findByChild(
+    @Param('childId', ParseIntPipe) childId: number,
+    @CurrentUser() currentUser?: UsersEntity,
+  ) {
+    return this.dailyActivitiesService.findByChild(
+      childId,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Get(':id')
-  @Roles('administrator', 'educator')
+  @Roles('administrator', 'educator', 'parent')
   @ApiOperation({ summary: 'Get a specific daily activity by ID' })
   @ApiParam({ name: 'id', description: 'Daily activity ID' })
   @ApiResponse({
     status: 200,
     description: 'Daily activity retrieved successfully',
   })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.dailyActivitiesService.findOne(id);
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this activity',
+  })
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser?: UsersEntity,
+  ) {
+    return this.dailyActivitiesService.findOne(
+      id,
+      currentUser?.id,
+      currentUser?.role.name,
+    );
   }
 
   @Patch(':id')

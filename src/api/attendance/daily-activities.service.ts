@@ -7,12 +7,14 @@ import { UpdateDailyActivityDto } from './dto/update-daily-activity.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
+import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class DailyActivitiesService {
   constructor(
     @InjectRepository(DailyActivitiesEntity)
     private readonly dailyActivitiesRepository: Repository<DailyActivitiesEntity>,
+    private readonly parentFilterService: ParentFilterService,
   ) {}
 
   async create(createDailyActivityDto: CreateDailyActivityDto, createdBy: number) {
@@ -41,15 +43,28 @@ export class DailyActivitiesService {
     return await this.dailyActivitiesRepository.save(activity);
   }
 
-  async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<DailyActivitiesEntity>> {
+  async findAll(
+    pageOptionsDto: PageOptionsDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<PageDto<DailyActivitiesEntity>> {
     const queryBuilder = this.dailyActivitiesRepository
       .createQueryBuilder('daily_activities')
       .leftJoinAndSelect('daily_activities.child', 'child')
       .leftJoinAndSelect('daily_activities.attendance', 'attendance')
       .leftJoinAndSelect('daily_activities.createdBy2', 'createdBy2')
-      .orderBy('daily_activities.createdAt', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+      .orderBy('daily_activities.createdAt', pageOptionsDto.order);
+
+    // If user is parent, only show activities for their children
+    if (currentUserRole === 'parent' && currentUserId) {
+      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (childIds.length === 0) {
+        return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
+      }
+      queryBuilder.andWhere('daily_activities.childId IN (:...childIds)', { childIds });
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const itemCount = await queryBuilder.getCount();
     const { entities } = await queryBuilder.getRawAndEntities();
@@ -67,7 +82,19 @@ export class DailyActivitiesService {
     });
   }
 
-  async findByChild(childId: number) {
+  async findByChild(
+    childId: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ) {
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
+    }
+
     return await this.dailyActivitiesRepository.find({
       where: { childId },
       relations: ['child', 'attendance', 'createdBy2'],
@@ -75,7 +102,11 @@ export class DailyActivitiesService {
     });
   }
 
-  async findOne(id: number) {
+  async findOne(
+    id: number,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ) {
     const activity = await this.dailyActivitiesRepository.findOne({
       where: { id },
       relations: ['child', 'attendance', 'createdBy2'],
@@ -83,6 +114,14 @@ export class DailyActivitiesService {
 
     if (!activity) {
       throw new NotFoundException(`Daily activity with ID ${id} not found`);
+    }
+
+    // If user is parent, verify they have access to this child
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, activity.childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this activity');
+      }
     }
 
     return activity;
