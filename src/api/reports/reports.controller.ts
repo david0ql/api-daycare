@@ -7,6 +7,7 @@ import {
   Res,
   Param,
   ParseIntPipe,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,6 +19,7 @@ import type { Response } from 'express';
 import moment from 'moment';
 import { ReportsService } from './reports.service';
 import { AttendanceReportDto } from './dto/attendance-report.dto';
+import { AttendanceByChildReportDto } from './dto/attendance-by-child-report.dto';
 import { ChildReportDto } from './dto/child-report.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -30,6 +32,8 @@ import { UsersEntity } from 'src/entities/users.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class ReportsController {
+  private readonly logger = new Logger(ReportsController.name);
+
   constructor(private readonly reportsService: ReportsService) {}
 
   @Post('attendance')
@@ -61,6 +65,54 @@ export class ReportsController {
     response.setHeader('Content-Length', pdfBuffer.length);
     
     response.send(pdfBuffer);
+  }
+
+  @Post('attendance/by-child')
+  @Roles('administrator', 'educator', 'parent')
+  @ApiOperation({ summary: 'Generate attendance report PDF for a specific child' })
+  @ApiResponse({
+    status: 200,
+    description: 'Attendance by child report generated successfully',
+    content: {
+      'application/pdf': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - You do not have access to this child',
+  })
+  async generateAttendanceByChildReport(
+    @Res() response: Response,
+    @Body() dto: AttendanceByChildReportDto,
+    @CurrentUser() currentUser: UsersEntity,
+  ): Promise<void> {
+    try {
+      const pdfBuffer = await this.reportsService.generateAttendanceByChildReport(
+        dto,
+        currentUser.id,
+        currentUser.role?.name,
+      );
+
+      const { childId, startDate, endDate } = dto;
+      const filename = `attendance-by-child-${childId}-${startDate}-to-${endDate}.pdf`;
+
+      response.setHeader('Content-Type', 'application/pdf');
+      response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      response.setHeader('Content-Length', pdfBuffer.length);
+
+      response.send(pdfBuffer);
+    } catch (err) {
+      this.logger.error(
+        `[AttendanceByChild] Error generating report: ${err?.message ?? err}`,
+        err?.stack,
+      );
+      throw err;
+    }
   }
 
   @Post('child/:childId')

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import moment from 'moment';
@@ -12,11 +12,14 @@ import { DailyActivitiesEntity } from 'src/entities/daily_activities.entity';
 import { DailyObservationsEntity } from 'src/entities/daily_observations.entity';
 import { ActivityPhotosEntity } from 'src/entities/activity_photos.entity';
 import { AttendanceReportDto } from './dto/attendance-report.dto';
+import { AttendanceByChildReportDto } from './dto/attendance-by-child-report.dto';
 import { ChildReportDto } from './dto/child-report.dto';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
 export class ReportsService {
+  private readonly logger = new Logger(ReportsService.name);
+
   private logo = {
     image: join(process.cwd(), 'src/assets/logo.png'),
     width: 150,
@@ -84,6 +87,66 @@ export class ReportsService {
       .getMany();
 
     return this.createPDFDocument('attendance', { attendances, startDate, endDate });
+  }
+
+  async generateAttendanceByChildReport(
+    dto: AttendanceByChildReportDto,
+    currentUserId?: number,
+    currentUserRole?: string,
+  ): Promise<Buffer> {
+    const { childId, startDate, endDate } = dto;
+
+    this.logger.log(`[AttendanceByChild] Request: childId=${childId}, startDate=${startDate}, endDate=${endDate}`);
+
+    const child = await this.childrenRepository.findOne({
+      where: { id: childId },
+    });
+
+    if (!child) {
+      this.logger.warn(`[AttendanceByChild] Child not found: childId=${childId}`);
+      throw new NotFoundException('Child not found');
+    }
+
+    if (currentUserRole === 'parent' && currentUserId) {
+      const hasAccess = await this.parentFilterService.hasAccessToChild(currentUserId, childId);
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this child');
+      }
+    }
+
+    const attendances = await this.attendanceRepository
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.child', 'child')
+      .leftJoinAndSelect('attendance.deliveredBy2', 'deliveredBy')
+      .leftJoinAndSelect('attendance.pickedUpBy2', 'pickedUpBy')
+      .where('attendance.childId = :childId', { childId })
+      .andWhere('attendance.attendanceDate BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .orderBy('attendance.attendanceDate', 'DESC')
+      .getMany();
+
+    this.logger.log(`[AttendanceByChild] Found ${attendances.length} attendance record(s) for child ${child.firstName} ${child.lastName}`);
+    if (attendances.length > 0) {
+      this.logger.log(
+        `[AttendanceByChild] Sample data: ${JSON.stringify(
+          attendances.slice(0, 3).map((a) => ({
+            id: a.id,
+            attendanceDate: a.attendanceDate,
+            checkInTime: a.checkInTime,
+            checkOutTime: a.checkOutTime,
+            hasChild: !!a.child,
+            deliveredBy2Name: a.deliveredBy2?.name,
+            pickedUpBy2Name: a.pickedUpBy2?.name,
+          })),
+        )}`,
+      );
+    }
+
+    return this.createPDFDocument('attendance-by-child', {
+      child,
+      attendances,
+      startDate,
+      endDate,
+    });
   }
 
   async generateChildReport(
@@ -253,6 +316,9 @@ export class ReportsService {
       case 'monthly-attendance':
         title = `Monthly Attendance Report - ${moment(data.startDate).format('MMMM YYYY')}`;
         break;
+      case 'attendance-by-child':
+        title = `Attendance Report - ${data.child.firstName} ${data.child.lastName} (${moment(data.startDate).format('MM/DD/YYYY')} - ${moment(data.endDate).format('MM/DD/YYYY')})`;
+        break;
     }
 
     const docDefinition: TDocumentDefinitions = {
@@ -291,6 +357,8 @@ export class ReportsService {
         return this.generateWeeklyAttendanceContent(data);
       case 'monthly-attendance':
         return this.generateMonthlyAttendanceContent(data);
+      case 'attendance-by-child':
+        return this.generateAttendanceContent(data);
       default:
         return [{ text: 'Report not found', style: 'subheader' }];
     }
@@ -321,13 +389,18 @@ export class ReportsService {
       ];
 
       attendances.forEach((attendance) => {
+        const childName = attendance.child
+          ? `${attendance.child.firstName} ${attendance.child.lastName}`
+          : 'N/A';
+        const deliveredByName = attendance.deliveredBy2?.name ?? 'N/A';
+        const pickedUpByName = attendance.pickedUpBy2?.name ?? 'N/A';
         tableBody.push([
           moment(attendance.attendanceDate).format('MM/DD/YYYY'),
-          `${attendance.child.firstName} ${attendance.child.lastName}`,
+          childName,
           attendance.checkInTime ? moment(attendance.checkInTime).format('HH:mm') : 'Not checked in',
           attendance.checkOutTime ? moment(attendance.checkOutTime).format('HH:mm') : 'Not checked out',
-          attendance.deliveredBy ? `${attendance.deliveredBy.firstName} ${attendance.deliveredBy.lastName}` : 'N/A',
-          attendance.pickedUpBy ? `${attendance.pickedUpBy.firstName} ${attendance.pickedUpBy.lastName}` : 'N/A',
+          deliveredByName,
+          pickedUpByName,
           attendance.checkInNotes || attendance.checkOutNotes || 'No notes',
         ]);
       });
