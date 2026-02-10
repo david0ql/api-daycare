@@ -556,13 +556,8 @@ export class ReportsService {
   }
 
   private generateWeeklyPaymentContent(data: any): Content[] {
-    const { children, startDate, endDate } = data;
+    const { children } = data;
     const content: Content[] = [];
-
-    content.push({
-      text: `Report Period: ${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
-      style: 'subheader',
-    });
 
     content.push({
       text: `Total children: ${children.length}`,
