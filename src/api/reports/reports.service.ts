@@ -560,7 +560,7 @@ export class ReportsService {
     const content: Content[] = [];
 
     content.push({
-      text: `Report Period (Week): ${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
+      text: `Report Period: ${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
       style: 'subheader',
     });
 
@@ -588,7 +588,7 @@ export class ReportsService {
           : 'Not assigned';
         const parentPhone = parent?.phone ?? 'Not available';
         const parentEmail = parent?.email ?? 'Not available';
-        const paymentStatus = child.hasPaymentAlert === true || child.hasPaymentAlert === 1 ? 'Alerta' : 'Al corriente';
+        const paymentStatus = child.hasPaymentAlert === true || child.hasPaymentAlert === 1 ? 'Alert' : 'Up to date';
 
         tableBody.push([
           `${child.firstName ?? ''} ${child.lastName ?? ''}`.trim(),
