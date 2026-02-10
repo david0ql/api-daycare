@@ -242,11 +242,18 @@ export class ReportsService {
       .addOrderBy('child.lastName', 'ASC')
       .getMany();
 
-    return this.createPDFDocument('weekly-payment', {
-      children,
-      startDate,
-      endDate,
-    });
+    this.logger.log(`[WeeklyPayment] Found ${children.length} active children for period ${startDate} to ${endDate}`);
+
+    try {
+      return await this.createPDFDocument('weekly-payment', {
+        children,
+        startDate,
+        endDate,
+      });
+    } catch (err) {
+      this.logger.error(`[WeeklyPayment] PDF generation failed: ${err?.message}`, err?.stack);
+      throw err;
+    }
   }
 
   async generateWeeklyAttendanceReport(): Promise<Buffer> {
@@ -575,15 +582,16 @@ export class ReportsService {
 
       children.forEach((child) => {
         const primaryParent = child.parentChildRelationships?.find((pcr: any) => pcr.isPrimary);
-        const parentName = primaryParent
-          ? `${primaryParent.parent.firstName} ${primaryParent.parent.lastName}`
+        const parent = primaryParent?.parent;
+        const parentName = parent
+          ? `${parent.firstName ?? ''} ${parent.lastName ?? ''}`.trim() || 'Not assigned'
           : 'Not assigned';
-        const parentPhone = primaryParent?.parent?.phone ?? 'Not available';
-        const parentEmail = primaryParent?.parent?.email ?? 'Not available';
-        const paymentStatus = child.hasPaymentAlert ? 'Alerta' : 'Al corriente';
+        const parentPhone = parent?.phone ?? 'Not available';
+        const parentEmail = parent?.email ?? 'Not available';
+        const paymentStatus = child.hasPaymentAlert === true || child.hasPaymentAlert === 1 ? 'Alerta' : 'Al corriente';
 
         tableBody.push([
-          `${child.firstName} ${child.lastName}`,
+          `${child.firstName ?? ''} ${child.lastName ?? ''}`.trim(),
           parentName,
           paymentStatus,
           parentPhone,
