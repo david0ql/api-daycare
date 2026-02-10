@@ -21,6 +21,7 @@ import { ReportsService } from './reports.service';
 import { AttendanceReportDto } from './dto/attendance-report.dto';
 import { AttendanceByChildReportDto } from './dto/attendance-by-child-report.dto';
 import { ChildReportDto } from './dto/child-report.dto';
+import { WeeklyPaymentReportDto } from './dto/weekly-payment-report.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -182,6 +183,38 @@ export class ReportsController {
     response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     response.setHeader('Content-Length', pdfBuffer.length);
     
+    response.send(pdfBuffer);
+  }
+
+  @Post('payment/weekly')
+  @Roles('administrator', 'educator')
+  @ApiOperation({ summary: 'Generate weekly payment report by child PDF' })
+  @ApiResponse({
+    status: 200,
+    description: 'Weekly payment report generated successfully',
+    content: {
+      'application/pdf': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  async generateWeeklyPaymentReport(
+    @Res() response: Response,
+    @Body() dto?: WeeklyPaymentReportDto,
+  ): Promise<void> {
+    const pdfBuffer = await this.reportsService.generateWeeklyPaymentReport(dto);
+
+    const startDate = dto?.startDate ?? moment().startOf('week').format('YYYY-MM-DD');
+    const endDate = dto?.endDate ?? moment().endOf('week').format('YYYY-MM-DD');
+    const filename = `weekly-payment-report-${startDate}-to-${endDate}.pdf`;
+
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    response.setHeader('Content-Length', pdfBuffer.length);
+
     response.send(pdfBuffer);
   }
 

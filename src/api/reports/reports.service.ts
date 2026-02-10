@@ -14,6 +14,7 @@ import { ActivityPhotosEntity } from 'src/entities/activity_photos.entity';
 import { AttendanceReportDto } from './dto/attendance-report.dto';
 import { AttendanceByChildReportDto } from './dto/attendance-by-child-report.dto';
 import { ChildReportDto } from './dto/child-report.dto';
+import { WeeklyPaymentReportDto } from './dto/weekly-payment-report.dto';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
 
 @Injectable()
@@ -228,6 +229,26 @@ export class ReportsService {
     return this.createPDFDocument('payment-alerts', { childrenWithAlerts });
   }
 
+  async generateWeeklyPaymentReport(dto?: WeeklyPaymentReportDto): Promise<Buffer> {
+    const startDate = dto?.startDate ?? moment().startOf('week').format('YYYY-MM-DD');
+    const endDate = dto?.endDate ?? moment().endOf('week').format('YYYY-MM-DD');
+
+    const children = await this.childrenRepository
+      .createQueryBuilder('child')
+      .leftJoinAndSelect('child.parentChildRelationships', 'pcr')
+      .leftJoinAndSelect('pcr.parent', 'parent')
+      .where('child.isActive = :isActive', { isActive: true })
+      .orderBy('child.firstName', 'ASC')
+      .addOrderBy('child.lastName', 'ASC')
+      .getMany();
+
+    return this.createPDFDocument('weekly-payment', {
+      children,
+      startDate,
+      endDate,
+    });
+  }
+
   async generateWeeklyAttendanceReport(): Promise<Buffer> {
     const startOfWeek = moment().startOf('week').toDate();
     const endOfWeek = moment().endOf('week').toDate();
@@ -319,6 +340,9 @@ export class ReportsService {
       case 'attendance-by-child':
         title = `Attendance Report - ${data.child.firstName} ${data.child.lastName} (${moment(data.startDate).format('MM/DD/YYYY')} - ${moment(data.endDate).format('MM/DD/YYYY')})`;
         break;
+      case 'weekly-payment':
+        title = `Weekly Payment Report by Child - ${moment(data.startDate).format('MM/DD/YYYY')} to ${moment(data.endDate).format('MM/DD/YYYY')}`;
+        break;
     }
 
     const docDefinition: TDocumentDefinitions = {
@@ -359,6 +383,8 @@ export class ReportsService {
         return this.generateMonthlyAttendanceContent(data);
       case 'attendance-by-child':
         return this.generateAttendanceContent(data);
+      case 'weekly-payment':
+        return this.generateWeeklyPaymentContent(data);
       default:
         return [{ text: 'Report not found', style: 'subheader' }];
     }
@@ -516,6 +542,62 @@ export class ReportsService {
             margin: [20, 0, 0, 5],
           });
         }
+      });
+    }
+
+    return content;
+  }
+
+  private generateWeeklyPaymentContent(data: any): Content[] {
+    const { children, startDate, endDate } = data;
+    const content: Content[] = [];
+
+    content.push({
+      text: `Report Period (Week): ${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
+      style: 'subheader',
+    });
+
+    content.push({
+      text: `Total children: ${children.length}`,
+      style: 'subheader',
+    });
+
+    if (children.length === 0) {
+      content.push({
+        text: 'No active children found.',
+        style: 'tableCell',
+        alignment: 'center',
+      });
+    } else {
+      const tableBody = [
+        ['Child', 'Parent/Guardian', 'Payment Status', 'Phone', 'Email'],
+      ];
+
+      children.forEach((child) => {
+        const primaryParent = child.parentChildRelationships?.find((pcr: any) => pcr.isPrimary);
+        const parentName = primaryParent
+          ? `${primaryParent.parent.firstName} ${primaryParent.parent.lastName}`
+          : 'Not assigned';
+        const parentPhone = primaryParent?.parent?.phone ?? 'Not available';
+        const parentEmail = primaryParent?.parent?.email ?? 'Not available';
+        const paymentStatus = child.hasPaymentAlert ? 'Alerta' : 'Al corriente';
+
+        tableBody.push([
+          `${child.firstName} ${child.lastName}`,
+          parentName,
+          paymentStatus,
+          parentPhone,
+          parentEmail,
+        ]);
+      });
+
+      content.push({
+        table: {
+          headerRows: 1,
+          widths: ['*', '*', '*', '*', '*'],
+          body: tableBody,
+        },
+        layout: 'lightHorizontalLines',
       });
     }
 
