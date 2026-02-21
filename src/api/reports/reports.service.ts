@@ -74,7 +74,10 @@ export class ReportsService {
     private readonly parentFilterService: ParentFilterService,
   ) {}
 
-  async generateAttendanceReport(attendanceReportDto: AttendanceReportDto): Promise<Buffer> {
+  async generateAttendanceReport(
+    attendanceReportDto: AttendanceReportDto,
+    reportType: 'attendance' | 'weekly-attendance' | 'monthly-attendance' = 'attendance',
+  ): Promise<Buffer> {
     const { startDate, endDate } = attendanceReportDto;
 
     const attendances = await this.attendanceRepository
@@ -87,7 +90,7 @@ export class ReportsService {
       .addOrderBy('child.firstName', 'ASC')
       .getMany();
 
-    return this.createPDFDocument('attendance', { attendances, startDate, endDate });
+    return this.createPDFDocument(reportType, { attendances, startDate, endDate });
   }
 
   async generateAttendanceByChildReport(
@@ -401,10 +404,10 @@ export class ReportsService {
     const { attendances, startDate, endDate } = data;
     const content: Content[] = [];
 
-    content.push({
-      text: `Report Period: ${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
-      style: 'subheader',
-    });
+    // content.push({
+    //   text: `Report Period:${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
+    //   style: 'subheader',
+    // });
 
     content.push({
       text: `Total Attendance Records: ${attendances.length}`,

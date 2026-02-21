@@ -246,7 +246,7 @@ export class ReportsController {
       endDate,
     };
     
-    const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto);
+    const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto, 'weekly-attendance');
     
     const filename = `weekly-attendance-report-${startDate}-to-${endDate}.pdf`;
     
@@ -285,7 +285,7 @@ export class ReportsController {
       endDate,
     };
     
-    const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto);
+    const pdfBuffer = await this.reportsService.generateAttendanceReport(reportDto, 'monthly-attendance');
     
     const filename = `monthly-attendance-report-${startDate}-to-${endDate}.pdf`;
     
