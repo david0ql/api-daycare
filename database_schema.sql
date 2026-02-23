@@ -437,6 +437,7 @@ INSERT INTO document_types (name, description, retention_days) VALUES
 ('medical_record', 'Medical records and prescriptions', 1825), -- 5 years
 ('emergency_contact', 'Emergency contact information', 365), -- 1 year
 ('insurance_card', 'Insurance card copy', 365), -- 1 year
+('representative_signature', 'Signed document', 365), -- 1 year
 ('other', 'Other documents', 365); -- 1 year
 
 -- Insert incident types

@@ -261,6 +261,11 @@ export class DocumentsService {
         retentionDays: 365, // 1 year
       },
       {
+        name: 'representative_signature',
+        description: 'Signed document',
+        retentionDays: 365, // 1 year
+      },
+      {
         name: 'other',
         description: 'Other documents',
         retentionDays: 365, // 1 year

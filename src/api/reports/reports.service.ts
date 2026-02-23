@@ -23,7 +23,8 @@ export class ReportsService {
 
   private logo = {
     image: join(process.cwd(), 'src/assets/logo.png'),
-    width: 150,
+    width: 70,
+    
     alignment: 'center' as const,
   };
 
@@ -32,7 +33,8 @@ export class ReportsService {
       fontSize: 18,
       bold: true,
       color: '#2c3e50',
-      margin: [0, 0, 0, 10],
+      //darle mas espacio verti
+      margin: [0, 30, 0, 20],
     },
     subheader: {
       fontSize: 14,
@@ -361,12 +363,16 @@ export class ReportsService {
       pageOrientation: 'landscape',
       pageSize: 'A4',
       header: {
+        margin: [40, 40, 40, 0],
         columns: [
-          this.logo,
+          { ...this.logo, width: this.logo.width },
           {
             text: title,
             style: 'header',
+            alignment: 'center',
+            width: '*',
           },
+          { width: this.logo.width, text: '' },
         ],
       },
       footer: {
