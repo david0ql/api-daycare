@@ -31,17 +31,6 @@ export class FileUploadService {
     subdirectory: string,
     prefix?: string
   ): Promise<{ filename: string; filePath: string }> {
-    console.log('FileUploadService - Received file:', {
-      originalname: file?.originalname,
-      mimetype: file?.mimetype,
-      size: file?.size,
-      hasBuffer: !!file?.buffer,
-      hasPath: !!file?.path,
-      hasStream: !!file?.stream,
-      path: file?.path,
-      keys: Object.keys(file || {})
-    });
-
     if (!file) {
       throw new Error('No file provided to FileUploadService');
     }

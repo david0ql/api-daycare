@@ -29,15 +29,6 @@ export class IncidentFileUploadService {
     mimeType: string;
   }> {
     try {
-      console.log('🔍 IncidentFileUploadService - File received:', {
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-        hasBuffer: !!file.buffer,
-        hasPath: !!file.path,
-        hasStream: !!file.stream
-      });
-
       // Generate unique filename
       const fileExtension = this.getFileExtension(file.originalname);
       const uniqueFilename = `incident-${incidentId}-${randomUUID()}${fileExtension}`;
@@ -46,17 +37,14 @@ export class IncidentFileUploadService {
       // Handle different Multer configurations
       if (file.buffer) {
         // In-memory storage
-        console.log('🔍 Using file.buffer (in-memory storage)');
         writeFileSync(finalFilePath, file.buffer);
       } else if (file.path) {
         // Disk storage - copy from temp location to final location
-        console.log('🔍 Using file.path (disk storage)');
         copyFileSync(file.path, finalFilePath);
         // Delete the temporary file
         unlinkSync(file.path);
       } else if (file.stream) {
         // Stream storage
-        console.log('🔍 Using file.stream (stream storage)');
         const writeStream = require('fs').createWriteStream(finalFilePath);
         file.stream.pipe(writeStream);
         
@@ -67,8 +55,6 @@ export class IncidentFileUploadService {
       } else {
         throw new Error('No valid file data found (buffer, path, or stream)');
       }
-
-      console.log('🔍 File saved successfully:', finalFilePath);
 
       return {
         filename: uniqueFilename,

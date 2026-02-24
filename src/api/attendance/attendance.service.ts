@@ -134,10 +134,6 @@ export class AttendanceService {
       }
     }
 
-    console.log('🔍 Backend - Attendance findOne - attendance:', attendance);
-    console.log('🔍 Backend - Attendance findOne - checkInNotes:', attendance.checkInNotes);
-    console.log('🔍 Backend - Attendance findOne - checkOutNotes:', attendance.checkOutNotes);
-
     return attendance;
   }
 

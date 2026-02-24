@@ -25,8 +25,6 @@ export class StaticFilesController {
     @Query('token') token: string,
     @Res() res: Response
   ) {
-    console.log('StaticFilesController - Token from query:', token);
-    
     // Validate token manually
     if (!token) {
       throw new UnauthorizedException('Token required');
@@ -54,8 +52,6 @@ export class StaticFilesController {
     @Query('token') token: string,
     @Res() res: Response
   ) {
-    console.log('StaticFilesController - Token from query:', token);
-    
     // Validate token manually
     if (!token) {
       throw new UnauthorizedException('Token required');

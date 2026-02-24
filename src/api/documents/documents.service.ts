@@ -75,10 +75,6 @@ export class DocumentsService {
     currentUserId: number,
     currentUserRole: string,
   ): Promise<PageDto<DocumentsEntity>> {
-    console.log('🔍 DocumentsService.findAll - currentUserId:', currentUserId);
-    console.log('🔍 DocumentsService.findAll - currentUserRole:', currentUserRole);
-    console.log('🔍 DocumentsService.findAll - pageOptionsDto:', pageOptionsDto);
-
     const queryBuilder = this.documentsRepository
       .createQueryBuilder('document')
       .leftJoinAndSelect('document.child', 'child')
@@ -96,15 +92,11 @@ export class DocumentsService {
       .orderBy('document.createdAt', 'DESC');
 
     const total = await queryBuilder.getCount();
-    console.log('🔍 DocumentsService.findAll - total count:', total);
-    
+
     const documents = await queryBuilder
       .skip(pageOptionsDto.skip)
       .take(pageOptionsDto.take)
       .getMany();
-    
-    console.log('🔍 DocumentsService.findAll - documents found:', documents.length);
-    console.log('🔍 DocumentsService.findAll - documents:', documents);
 
     // Add expiration information to each document
     const documentsWithExpiration = documents.map(doc => ({
@@ -485,9 +477,7 @@ export class DocumentsService {
       expiresAt: expirationDate,
     });
 
-    console.log('🔍 DocumentsService.uploadDocument - saving document:', newDocument);
     const savedDocument = await this.documentsRepository.save(newDocument);
-    console.log('🔍 DocumentsService.uploadDocument - saved document:', savedDocument);
 
     // Return document with relations
     const retrievedDocument = await this.documentsRepository.findOne({
@@ -499,7 +489,6 @@ export class DocumentsService {
       throw new NotFoundException('Failed to retrieve created document');
     }
 
-    console.log('🔍 DocumentsService.uploadDocument - retrieved document:', retrievedDocument);
     return retrievedDocument;
   }
 
