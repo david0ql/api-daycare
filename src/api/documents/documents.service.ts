@@ -533,6 +533,60 @@ export class DocumentsService {
     };
   }
 
+  async replaceDocumentFile(
+    id: number,
+    file: Express.Multer.File,
+    currentUserId: number,
+  ): Promise<DocumentsEntity> {
+    const document = await this.documentsRepository.findOne({
+      where: { id, uploadedBy: currentUserId },
+      relations: ['child', 'documentType'],
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found or you are not the uploader');
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+
+    // Delete old file from disk (filePath can be relative or absolute)
+    try {
+      const oldPath = path.isAbsolute(document.filePath)
+        ? document.filePath
+        : path.join(process.cwd(), document.filePath);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+    } catch (error) {
+      console.error('Error deleting old file:', error);
+    }
+
+    // Save new file
+    const fileInfo = await this.fileUploadService.saveFile(
+      file,
+      document.childId,
+      document.documentTypeId,
+    );
+
+    await this.documentsRepository.update(id, {
+      filename: fileInfo.filename,
+      originalFilename: fileInfo.originalFilename,
+      filePath: fileInfo.filePath,
+      fileSize: fileInfo.fileSize,
+      mimeType: fileInfo.mimeType,
+    });
+
+    const updated = await this.documentsRepository.findOne({
+      where: { id },
+      relations: ['child', 'documentType', 'uploadedBy2'],
+    });
+    if (!updated) {
+      throw new NotFoundException('Failed to retrieve updated document');
+    }
+    return updated;
+  }
+
   async deleteDocumentFile(id: number, currentUserId: number): Promise<void> {
     const document = await this.documentsRepository.findOne({
       where: { id, uploadedBy: currentUserId },
@@ -545,8 +599,12 @@ export class DocumentsService {
     // Delete file from disk
     try {
       const fs = require('fs');
-      if (fs.existsSync(document.filePath)) {
-        fs.unlinkSync(document.filePath);
+      const path = require('path');
+      const filePath = path.isAbsolute(document.filePath)
+        ? document.filePath
+        : path.join(process.cwd(), document.filePath);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
       }
     } catch (error) {
       console.error('Error deleting file:', error);

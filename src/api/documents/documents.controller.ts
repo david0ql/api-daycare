@@ -201,6 +201,30 @@ export class DocumentsController {
     return this.documentsService.findOne(+id, currentUser.id, currentUser.role.name);
   }
 
+  @Patch(':id/file')
+  @Roles(UserRoleEnum.ADMINISTRATOR, UserRoleEnum.EDUCATOR)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'New document file' },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiOperation({ summary: 'Replace document file (only by uploader)' })
+  @ApiResponse({ status: 200, description: 'Document file replaced successfully' })
+  @ApiResponse({ status: 404, description: 'Document not found or user not authorized' })
+  replaceDocumentFile(
+    @Param('id') id: string,
+    @UploadedFile(new FileValidationPipe()) file: Express.Multer.File,
+    @CurrentUser() currentUser: UsersEntity,
+  ) {
+    return this.documentsService.replaceDocumentFile(+id, file, currentUser.id);
+  }
+
   @Patch(':id')
   @Roles(UserRoleEnum.ADMINISTRATOR, UserRoleEnum.EDUCATOR)
   @ApiOperation({ summary: 'Update a document (only by uploader)' })
