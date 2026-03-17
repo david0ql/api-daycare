@@ -52,10 +52,9 @@ export class DailyActivitiesEntity {
   @Column("tinyint", {
     name: "completed",
     nullable: true,
-    width: 1,
     default: () => "'0'",
   })
-  completed: boolean | null;
+  completed: number | null; // 0=pending, 1=completed, 2=rejected
 
   @Column("timestamp", { name: "time_completed", nullable: true })
   timeCompleted: Date | null;

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional, IsBoolean, IsEnum, IsInt } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsNumber, IsEnum, IsInt, Min, Max } from 'class-validator';
 
 export enum ActivityTypeEnum {
   BREAKFAST = 'breakfast',
@@ -31,13 +31,16 @@ export class CreateDailyActivityDto {
   @IsEnum(ActivityTypeEnum)
   activityType: ActivityTypeEnum;
 
-  @ApiProperty({ 
-    description: 'Whether the activity is completed',
-    default: false
+  @ApiProperty({
+    description: 'Activity status: 0=pending, 1=completed, 2=rejected',
+    default: 0,
+    enum: [0, 1, 2],
   })
-  @IsBoolean()
+  @IsNumber()
+  @Min(0)
+  @Max(2)
   @IsOptional()
-  completed?: boolean;
+  completed?: number;
 
   @ApiProperty({ 
     description: 'Time when the activity was completed',
