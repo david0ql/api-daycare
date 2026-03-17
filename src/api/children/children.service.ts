@@ -16,6 +16,7 @@ import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { SearchDto } from 'src/dto/search.dto';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
+import { FileUploadService } from '../attendance/services/file-upload.service';
 
 @Injectable()
 export class ChildrenService {
@@ -33,6 +34,7 @@ export class ChildrenService {
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
     private readonly parentFilterService: ParentFilterService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   async create(createChildDto: CreateChildDto): Promise<ChildrenEntity> {
@@ -354,4 +356,16 @@ export class ChildrenService {
     }));
   }
 
+  async uploadProfilePhoto(id: number, file: Express.Multer.File): Promise<ChildrenEntity> {
+    const child = await this.findOne(id, undefined, 'administrator');
+
+    if (child.profilePicture) {
+      await this.fileUploadService.deleteFile(child.profilePicture);
+    }
+
+    const { filePath } = await this.fileUploadService.saveFile(file, 'children-profiles', 'child');
+    await this.childrenRepository.update(id, { profilePicture: filePath });
+
+    return this.findOne(id, undefined, 'administrator');
+  }
 }

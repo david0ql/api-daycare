@@ -9,6 +9,9 @@ import {
   UseGuards,
   Query,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,7 +20,9 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -184,6 +189,23 @@ export class UsersController {
   })
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.usersService.remove(id);
+  }
+
+  @Post(':id/profile-photo')
+  @Roles('administrator', 'educator')
+  @ApiOperation({ summary: 'Upload user profile photo' })
+  @ApiParam({ name: 'id', description: 'User ID', example: 1 })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 201, description: 'Profile photo uploaded successfully', type: UserResponseDto })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProfilePhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<UsersEntity> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    return this.usersService.uploadProfilePhoto(id, file);
   }
 
   @Get('profile/me')

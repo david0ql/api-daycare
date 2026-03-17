@@ -10,6 +10,7 @@ import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { SearchDto } from 'src/dto/search.dto';
+import { FileUploadService } from '../attendance/services/file-upload.service';
 
 @Injectable()
 export class UsersService {
@@ -18,6 +19,7 @@ export class UsersService {
     private readonly usersRepository: Repository<UsersEntity>,
     @InjectRepository(UserRolesEntity)
     private readonly userRolesRepository: Repository<UserRolesEntity>,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UsersEntity> {
@@ -170,5 +172,18 @@ export class UsersService {
         id: 'ASC',
       },
     });
+  }
+
+  async uploadProfilePhoto(id: number, file: Express.Multer.File): Promise<UsersEntity> {
+    const user = await this.findOne(id);
+
+    if (user.profilePicture) {
+      await this.fileUploadService.deleteFile(user.profilePicture);
+    }
+
+    const { filePath } = await this.fileUploadService.saveFile(file, 'users-profiles', 'user');
+    await this.usersRepository.update(id, { profilePicture: filePath });
+
+    return this.findOne(id);
   }
 }

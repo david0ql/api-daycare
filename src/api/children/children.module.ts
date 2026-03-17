@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { MulterModule } from '@nestjs/platform-express';
 import { ChildrenService } from './children.service';
 import { ChildrenController } from './children.controller';
 import { ChildrenEntity } from 'src/entities/children.entity';
@@ -9,6 +10,7 @@ import { AuthorizedPickupPersonsEntity } from 'src/entities/authorized_pickup_pe
 import { MedicalInformationEntity } from 'src/entities/medical_information.entity';
 import { UsersEntity } from 'src/entities/users.entity';
 import { SharedModule } from '../shared/shared.module';
+import { FileUploadService } from '../attendance/services/file-upload.service';
 
 @Module({
   imports: [
@@ -20,10 +22,11 @@ import { SharedModule } from '../shared/shared.module';
       MedicalInformationEntity,
       UsersEntity,
     ]),
+    MulterModule.register({}),
     SharedModule,
   ],
   controllers: [ChildrenController],
-  providers: [ChildrenService],
+  providers: [ChildrenService, FileUploadService],
   exports: [ChildrenService],
 })
 export class ChildrenModule {}

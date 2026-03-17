@@ -90,7 +90,20 @@ export class StaticFilesController {
   @Roles('administrator', 'educator', 'parent')
   async getPickupPersonPhoto(@Param('filename') filename: string, @Res() res: Response) {
     const filePath = join(process.cwd(), 'uploads', 'pickup-persons', filename);
-    
+
+    if (!existsSync(filePath)) {
+      throw new NotFoundException('File not found');
+    }
+
+    const fileStream = createReadStream(filePath);
+    fileStream.pipe(res);
+  }
+
+  @Get('users-profiles/:filename')
+  @Roles('administrator', 'educator', 'parent')
+  async getUserProfile(@Param('filename') filename: string, @Res() res: Response) {
+    const filePath = join(process.cwd(), 'uploads', 'users-profiles', filename);
+
     if (!existsSync(filePath)) {
       throw new NotFoundException('File not found');
     }

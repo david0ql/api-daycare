@@ -9,6 +9,9 @@ import {
   UseGuards,
   Query,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,7 +20,9 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ChildrenService } from './children.service';
 import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
@@ -257,6 +262,23 @@ export class ChildrenController {
   })
   async toggleActiveStatus(@Param('id', ParseIntPipe) id: number): Promise<ChildrenEntity> {
     return this.childrenService.toggleActiveStatus(id);
+  }
+
+  @Post(':id/profile-photo')
+  @Roles('administrator', 'educator')
+  @ApiOperation({ summary: 'Upload child profile photo' })
+  @ApiParam({ name: 'id', description: 'Child ID', example: 1 })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 201, description: 'Profile photo uploaded successfully', type: ChildResponseDto })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProfilePhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ChildrenEntity> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    return this.childrenService.uploadProfilePhoto(id, file);
   }
 
   @Delete(':id')

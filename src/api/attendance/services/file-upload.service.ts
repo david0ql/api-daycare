@@ -16,6 +16,7 @@ export class FileUploadService {
       'incident-attachments',
       'children-profiles',
       'pickup-persons',
+      'users-profiles',
     ];
 
     directories.forEach(dir => {
