@@ -53,7 +53,9 @@ export class DailyActivitiesService {
       .leftJoinAndSelect('daily_activities.child', 'child')
       .leftJoinAndSelect('daily_activities.attendance', 'attendance')
       .leftJoinAndSelect('daily_activities.createdBy2', 'createdBy2')
-      .orderBy('daily_activities.createdAt', pageOptionsDto.order);
+      .orderBy('attendance.attendanceDate', 'DESC')
+      .addOrderBy('child.firstName', 'ASC')
+      .addOrderBy('child.lastName', 'ASC');
 
     // If user is parent, only show activities for their children
     if (currentUserRole === 'parent' && currentUserId) {
