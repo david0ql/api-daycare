@@ -147,11 +147,17 @@ export class ReportsService {
       );
     }
 
+    const today = moment().format('YYYY-MM-DD');
+    const childCreatedAt = child.createdAt ? moment(child.createdAt).format('YYYY-MM-DD') : startDate;
+    const effectiveStart = moment.max(moment(startDate), moment(childCreatedAt)).format('YYYY-MM-DD');
+    const effectiveEnd = moment.min(moment(endDate), moment(today)).format('YYYY-MM-DD');
+
     return this.createPDFDocument('attendance-by-child', {
       child,
       attendances,
       startDate,
       endDate,
+      allDates: effectiveStart <= effectiveEnd ? this.generateDateRange(effectiveStart, effectiveEnd) : [],
     });
   }
 
@@ -398,7 +404,7 @@ export class ReportsService {
       case 'monthly-attendance':
         return this.generateMonthlyAttendanceContent(data);
       case 'attendance-by-child':
-        return this.generateAttendanceContent(data);
+        return this.generateAttendanceByChildContent(data);
       case 'weekly-payment':
         return this.generateWeeklyPaymentContent(data);
       default:
@@ -669,6 +675,85 @@ export class ReportsService {
         layout: 'lightHorizontalLines',
       });
     }
+
+    return content;
+  }
+
+  private generateDateRange(startDate: string, endDate: string): string[] {
+    const dates: string[] = [];
+    const current = moment(startDate);
+    const end = moment(endDate);
+    while (current.isSameOrBefore(end, 'day')) {
+      dates.push(current.format('YYYY-MM-DD'));
+      current.add(1, 'day');
+    }
+    return dates;
+  }
+
+  private generateAttendanceByChildContent(data: any): Content[] {
+    const { child, attendances, startDate, endDate, allDates } = data;
+    const content: Content[] = [];
+
+    const recordsByDate = new Map<string, any>();
+    attendances.forEach((a: any) => {
+      const key = moment(a.attendanceDate).format('YYYY-MM-DD');
+      recordsByDate.set(key, a);
+    });
+
+    const daysPresent = attendances.length;
+    const daysAbsent = allDates.length - daysPresent;
+
+    content.push({
+      text: `Period: ${moment(startDate).format('MM/DD/YYYY')} - ${moment(endDate).format('MM/DD/YYYY')}`,
+      style: 'subheader',
+    });
+
+    content.push({
+      columns: [
+        { text: `Total days in range: ${allDates.length}`, style: 'tableCell', width: '*' },
+        { text: `Days present: ${daysPresent}`, style: 'tableCell', width: '*' },
+        { text: `Days absent: ${daysAbsent}`, style: 'tableCell', width: '*' },
+      ],
+      margin: [0, 0, 0, 10],
+    });
+
+    const tableBody = [
+      ['Date', 'Status', 'Check In', 'Check Out', 'Delivered By', 'Picked Up By', 'Notes'],
+    ];
+
+    allDates.forEach((date: string) => {
+      const record = recordsByDate.get(date);
+      if (record) {
+        tableBody.push([
+          moment(date).format('MM/DD/YYYY'),
+          'Present',
+          record.checkInTime ? moment(record.checkInTime).format('HH:mm') : 'N/A',
+          record.checkOutTime ? moment(record.checkOutTime).format('HH:mm') : 'N/A',
+          record.deliveredBy2?.name ?? 'N/A',
+          record.pickedUpBy2?.name ?? 'N/A',
+          record.checkInNotes || record.checkOutNotes || '',
+        ]);
+      } else {
+        tableBody.push([
+          moment(date).format('MM/DD/YYYY'),
+          'Absent',
+          '-',
+          '-',
+          '-',
+          '-',
+          '',
+        ]);
+      }
+    });
+
+    content.push({
+      table: {
+        headerRows: 1,
+        widths: ['*', '*', '*', '*', '*', '*', '*'],
+        body: tableBody,
+      },
+      layout: 'lightHorizontalLines',
+    });
 
     return content;
   }
