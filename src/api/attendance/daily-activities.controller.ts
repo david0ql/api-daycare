@@ -22,6 +22,7 @@ import {
 import { DailyActivitiesService } from './daily-activities.service';
 import { CreateDailyActivityDto } from './dto/create-daily-activity.dto';
 import { UpdateDailyActivityDto } from './dto/update-daily-activity.dto';
+import { CreateBulkDailyActivitiesDto } from './dto/create-bulk-daily-activities.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { DailyActivitiesEntity } from 'src/entities/daily_activities.entity';
@@ -41,15 +42,23 @@ export class DailyActivitiesController {
   @Post()
   @Roles('administrator', 'educator')
   @ApiOperation({ summary: 'Create a new daily activity record' })
-  @ApiResponse({
-    status: 201,
-    description: 'Daily activity created successfully',
-  })
+  @ApiResponse({ status: 201, description: 'Daily activity created successfully' })
   create(
     @Body() createDailyActivityDto: CreateDailyActivityDto,
     @CurrentUser() currentUser: UsersEntity,
   ) {
     return this.dailyActivitiesService.create(createDailyActivityDto, currentUser.id);
+  }
+
+  @Post('bulk')
+  @Roles('administrator', 'educator')
+  @ApiOperation({ summary: 'Create multiple daily activity records at once' })
+  @ApiResponse({ status: 201, description: 'Daily activities created successfully' })
+  createBulk(
+    @Body() createBulkDto: CreateBulkDailyActivitiesDto,
+    @CurrentUser() currentUser: UsersEntity,
+  ) {
+    return this.dailyActivitiesService.createBulk(createBulkDto, currentUser.id);
   }
 
   @Get('all')

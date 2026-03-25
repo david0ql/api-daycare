@@ -2,8 +2,9 @@ import { Injectable, NotFoundException, ForbiddenException, ConflictException } 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DailyActivitiesEntity } from 'src/entities/daily_activities.entity';
-import { CreateDailyActivityDto } from './dto/create-daily-activity.dto';
+import { CreateDailyActivityDto, ActivityTypeEnum } from './dto/create-daily-activity.dto';
 import { UpdateDailyActivityDto } from './dto/update-daily-activity.dto';
+import { CreateBulkDailyActivitiesDto } from './dto/create-bulk-daily-activities.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
@@ -41,6 +42,49 @@ export class DailyActivitiesService {
     });
 
     return await this.dailyActivitiesRepository.save(activity);
+  }
+
+  async createBulk(
+    dto: CreateBulkDailyActivitiesDto,
+    createdBy: number,
+  ): Promise<DailyActivitiesEntity[]> {
+    const { childId, attendanceId, activities } = dto;
+    const REPEATABLE_TYPES: string[] = [
+      ActivityTypeEnum.DIAPER_CHANGE,
+      ActivityTypeEnum.HYDRATION,
+    ];
+
+    // Fetch existing activities for this attendance to detect conflicts
+    const existing = await this.dailyActivitiesRepository.find({
+      where: { childId, attendanceId },
+      select: ['activityType'],
+    });
+    const existingTypes = existing.map((a) => a.activityType);
+
+    // Filter out non-repeatable types that already exist
+    const toCreate = activities.filter(
+      (item) =>
+        REPEATABLE_TYPES.includes(item.activityType) ||
+        !existingTypes.includes(item.activityType as any),
+    );
+
+    if (toCreate.length === 0) {
+      return [];
+    }
+
+    const entities = toCreate.map((item) =>
+      this.dailyActivitiesRepository.create({
+        childId,
+        attendanceId,
+        activityType: item.activityType,
+        completed: item.completed ?? 0,
+        timeCompleted: item.timeCompleted,
+        notes: item.notes,
+        createdBy,
+      }),
+    );
+
+    return await this.dailyActivitiesRepository.save(entities);
   }
 
   async findAll(
