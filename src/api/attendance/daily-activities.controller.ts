@@ -23,6 +23,7 @@ import { DailyActivitiesService } from './daily-activities.service';
 import { CreateDailyActivityDto } from './dto/create-daily-activity.dto';
 import { UpdateDailyActivityDto } from './dto/update-daily-activity.dto';
 import { CreateBulkDailyActivitiesDto } from './dto/create-bulk-daily-activities.dto';
+import { UpdateBulkDailyActivitiesDto } from './dto/update-bulk-daily-activities.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { DailyActivitiesEntity } from 'src/entities/daily_activities.entity';
@@ -148,6 +149,18 @@ export class DailyActivitiesController {
       currentUser?.id,
       currentUser?.role.name,
     );
+  }
+
+  @Patch('bulk-update')
+  @Roles('administrator', 'educator')
+  @UsePipes(ValidationPipe)
+  @ApiOperation({ summary: 'Update multiple daily activity records at once' })
+  @ApiResponse({ status: 200, description: 'Daily activities updated successfully' })
+  updateBulk(
+    @Body() updateBulkDto: UpdateBulkDailyActivitiesDto,
+    @CurrentUser() currentUser: UsersEntity,
+  ) {
+    return this.dailyActivitiesService.updateBulk(updateBulkDto, currentUser.id, currentUser.role.name);
   }
 
   @Patch(':id')

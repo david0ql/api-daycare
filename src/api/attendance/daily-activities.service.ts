@@ -5,6 +5,7 @@ import { DailyActivitiesEntity } from 'src/entities/daily_activities.entity';
 import { CreateDailyActivityDto, ActivityTypeEnum } from './dto/create-daily-activity.dto';
 import { UpdateDailyActivityDto } from './dto/update-daily-activity.dto';
 import { CreateBulkDailyActivitiesDto } from './dto/create-bulk-daily-activities.dto';
+import { UpdateBulkDailyActivitiesDto } from './dto/update-bulk-daily-activities.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
@@ -85,6 +86,33 @@ export class DailyActivitiesService {
     );
 
     return await this.dailyActivitiesRepository.save(entities);
+  }
+
+  async updateBulk(
+    dto: UpdateBulkDailyActivitiesDto,
+    userId: number,
+    userRole: string,
+  ): Promise<DailyActivitiesEntity[]> {
+    const results: DailyActivitiesEntity[] = [];
+
+    for (const item of dto.updates) {
+      const { id, ...updateData } = item;
+      const activity = await this.dailyActivitiesRepository.findOne({ where: { id } });
+      if (!activity) continue;
+
+      if (activity.createdBy !== userId && userRole !== 'administrator') {
+        throw new ForbiddenException('You can only update activities you created');
+      }
+
+      await this.dailyActivitiesRepository.update(id, updateData);
+      const updated = await this.dailyActivitiesRepository.findOne({
+        where: { id },
+        relations: ['child', 'attendance', 'createdBy2'],
+      });
+      if (updated) results.push(updated);
+    }
+
+    return results;
   }
 
   async findAll(
