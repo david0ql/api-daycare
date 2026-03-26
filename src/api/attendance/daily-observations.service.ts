@@ -19,6 +19,16 @@ export class DailyObservationsService {
     private readonly fcmService: FcmService,
   ) {}
 
+  private readonly moodLabels: Record<string, string> = {
+    happy: 'Feliz',
+    sad: 'Triste',
+    tired: 'Cansado',
+    energetic: 'Enérgico',
+    calm: 'Tranquilo',
+    cranky: 'Irritable',
+    neutral: 'Neutral',
+  };
+
   async create(createDailyObservationDto: CreateDailyObservationDto, createdBy: number) {
     const observation = this.dailyObservationsRepository.create({
       ...createDailyObservationDto,
@@ -27,10 +37,13 @@ export class DailyObservationsService {
 
     const saved = await this.dailyObservationsRepository.save(observation);
 
+    const moodLabel = this.moodLabels[saved.mood] || saved.mood;
+    const notePreview = saved.generalObservations ? `: ${saved.generalObservations.substring(0, 50)}${saved.generalObservations.length > 50 ? '...' : ''}` : '';
+
     this.fcmService.notifyChildParents(
       createDailyObservationDto.childId,
       '📝 Nueva observación',
-      `Se ha registrado una observación del día para tu hijo/a`,
+      `Estado: ${moodLabel}${notePreview}`,
       { type: 'observation', observationId: String(saved.id) },
     );
 

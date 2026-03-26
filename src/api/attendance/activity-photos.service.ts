@@ -45,10 +45,14 @@ export class ActivityPhotosService {
 
     const saved = await this.activityPhotosRepository.save(photo);
 
+    const captionPreview = saved.caption 
+      ? `: ${saved.caption.substring(0, 50)}${saved.caption.length > 50 ? '...' : ''}` 
+      : '';
+
     this.fcmService.notifyChildParents(
       createActivityPhotoDto.childId,
       '📸 Nueva foto de actividad',
-      `Se ha subido una nueva foto de actividad para tu hijo/a`,
+      `Se ha subido una nueva foto${captionPreview}`,
       { type: 'photo', photoId: String(saved.id) },
     );
 

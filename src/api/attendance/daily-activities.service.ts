@@ -21,6 +21,17 @@ export class DailyActivitiesService {
     private readonly fcmService: FcmService,
   ) {}
 
+  private readonly activityLabels: Record<string, string> = {
+    breakfast: 'Desayuno',
+    lunch: 'Almuerzo',
+    snack: 'Merienda',
+    nap: 'Siesta',
+    diaper_change: 'Cambio de pañal',
+    clothing_change: 'Cambio de ropa',
+    hydration: 'Hidratación',
+    other: 'Otro',
+  };
+
   async create(createDailyActivityDto: CreateDailyActivityDto, createdBy: number) {
     const { childId, attendanceId, activityType } = createDailyActivityDto;
 
@@ -46,10 +57,12 @@ export class DailyActivitiesService {
 
     const saved = await this.dailyActivitiesRepository.save(activity);
 
+    const activityLabel = this.activityLabels[saved.activityType] || saved.activityType;
+
     this.fcmService.notifyChildParents(
       childId,
       '📋 Actividad registrada',
-      `Se ha registrado una nueva actividad diaria para tu hijo/a`,
+      `Se ha registrado la actividad de ${activityLabel} para tu hijo/a`,
       { type: 'activity', activityId: String(saved.id) },
     );
 
@@ -99,10 +112,16 @@ export class DailyActivitiesService {
     const saved = await this.dailyActivitiesRepository.save(entities);
 
     if (saved.length > 0) {
+      const activityLabels = saved.map(s => this.activityLabels[s.activityType] || s.activityType);
+      const uniqueLabels = [...new Set(activityLabels)];
+      const bodyText = uniqueLabels.length > 1 
+        ? `Se han registrado las actividades para tu hijo/a: ${uniqueLabels.join(', ')}` 
+        : `Se ha registrado la actividad de ${uniqueLabels[0]} para tu hijo/a`;
+
       this.fcmService.notifyChildParents(
         childId,
         '📋 Actividades registradas',
-        `Se han registrado ${saved.length} actividades diarias para tu hijo/a`,
+        bodyText,
         { type: 'activity' },
       );
     }

@@ -71,7 +71,7 @@ export class IncidentsService {
     this.fcmService.notifyChildParents(
       childId,
       '⚠️ Incidente reportado',
-      `Se ha registrado un incidente para ${childName}: ${title}`,
+      `Incidente (${incidentType.name}) para ${childName}: ${title}`,
       { type: 'incident', incidentId: String(savedIncident.id) },
     );
 
