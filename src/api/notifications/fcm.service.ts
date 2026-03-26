@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
 import { ParentChildRelationshipsEntity } from 'src/entities/parent_child_relationships.entity';
 import { UsersEntity } from 'src/entities/users.entity';
+import { NotificationLogService } from './notification-log.service';
 import envVars from 'src/config/env';
 
 @Injectable()
@@ -16,6 +17,7 @@ export class FcmService implements OnModuleInit {
     private readonly parentChildRepository: Repository<ParentChildRelationshipsEntity>,
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
+    private readonly notificationLogService: NotificationLogService,
   ) {}
 
   onModuleInit() {
@@ -51,13 +53,34 @@ export class FcmService implements OnModuleInit {
     body: string,
     data?: Record<string, string>,
   ): Promise<void> {
-    if (!this.initialized) return;
-
     try {
       const relationships = await this.parentChildRepository.find({
         where: { childId },
         relations: ['parent'],
       });
+
+      const parentIds = relationships
+        .map((r) => r.parent?.id)
+        .filter((id): id is number => !!id);
+
+      // Save to database log
+      if (parentIds.length > 0) {
+        await this.notificationLogService.createMany(
+          childId,
+          parentIds,
+          title,
+          body,
+          data?.type || 'general',
+          data?.activityId ? parseInt(data.activityId) : 
+            data?.incidentId ? parseInt(data.incidentId) : 
+            data?.observationId ? parseInt(data.observationId) : undefined
+        );
+      }
+
+      if (!this.initialized) {
+        this.logger.warn('Firebase NOT initialized, skipping push notification');
+        return;
+      }
 
       const tokens = relationships
         .map((r) => r.parent?.fcmToken)
@@ -103,7 +126,7 @@ export class FcmService implements OnModuleInit {
           .execute();
       }
     } catch (error) {
-      this.logger.error(`Error sending FCM notification for child ${childId}:`, error);
+      this.logger.error(`Error processing notification for child ${childId}:`, error);
     }
   }
 }
