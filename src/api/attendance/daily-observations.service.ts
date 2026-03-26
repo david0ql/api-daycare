@@ -8,6 +8,7 @@ import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
+import { FcmService } from 'src/api/notifications/fcm.service';
 
 @Injectable()
 export class DailyObservationsService {
@@ -15,6 +16,7 @@ export class DailyObservationsService {
     @InjectRepository(DailyObservationsEntity)
     private readonly dailyObservationsRepository: Repository<DailyObservationsEntity>,
     private readonly parentFilterService: ParentFilterService,
+    private readonly fcmService: FcmService,
   ) {}
 
   async create(createDailyObservationDto: CreateDailyObservationDto, createdBy: number) {
@@ -23,7 +25,16 @@ export class DailyObservationsService {
       createdBy,
     });
 
-    return await this.dailyObservationsRepository.save(observation);
+    const saved = await this.dailyObservationsRepository.save(observation);
+
+    this.fcmService.notifyChildParents(
+      createDailyObservationDto.childId,
+      '📝 Nueva observación',
+      `Se ha registrado una observación del día para tu hijo/a`,
+      { type: 'observation', observationId: String(saved.id) },
+    );
+
+    return saved;
   }
 
   async findAll(

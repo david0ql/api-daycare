@@ -13,6 +13,9 @@ interface EnvVars {
   EXPO_ACCESS_TOKEN: string
   ENABLE_NOTIFICATIONS: boolean
   ENABLE_SMS: boolean
+  FIREBASE_PROJECT_ID: string
+  FIREBASE_CLIENT_EMAIL: string
+  FIREBASE_PRIVATE_KEY: string
 }
 
 const envSchema = joi
@@ -27,6 +30,9 @@ const envSchema = joi
     EXPO_ACCESS_TOKEN: joi.string().required(),
     ENABLE_NOTIFICATIONS: joi.boolean().default(false),
     ENABLE_SMS: joi.boolean().default(false),
+    FIREBASE_PROJECT_ID: joi.string().default(''),
+    FIREBASE_CLIENT_EMAIL: joi.string().default(''),
+    FIREBASE_PRIVATE_KEY: joi.string().default(''),
   })
   .unknown(true)
   .required();

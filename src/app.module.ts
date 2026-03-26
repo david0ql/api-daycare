@@ -10,6 +10,7 @@ import { DocumentsModule } from './api/documents/documents.module';
 import { CalendarModule } from './api/calendar/calendar.module';
 import { ReportsModule } from './api/reports/reports.module';
 import { RolesModule } from './api/roles/roles.module';
+import { NotificationsModule } from './api/notifications/notifications.module';
 
 import envVars from './config/env';
 
@@ -25,6 +26,7 @@ import envVars from './config/env';
       entities: [__dirname + '/entities/*.entity{.ts,.js}'],
       autoLoadEntities: true,
     }),
+    NotificationsModule,
     AuthModule,
     UsersModule,
     ChildrenModule,

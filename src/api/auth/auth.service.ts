@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -8,6 +8,7 @@ import { UserRolesEntity } from 'src/entities/user_roles.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 
 @Injectable()
 export class AuthService {
@@ -85,6 +86,15 @@ export class AuthService {
         role: userWithRole.role,
       },
     };
+  }
+
+  async updateFcmToken(userId: number, dto: UpdateFcmTokenDto): Promise<{ message: string }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    await this.usersRepository.update(userId, { fcmToken: dto.fcmToken });
+    return { message: 'FCM token updated' };
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {

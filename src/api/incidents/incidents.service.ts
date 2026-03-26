@@ -14,6 +14,7 @@ import { PageDto } from 'src/dto/page.dto';
 import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { IncidentFileUploadService } from './services/incident-file-upload.service';
+import { FcmService } from 'src/api/notifications/fcm.service';
 
 @Injectable()
 export class IncidentsService {
@@ -29,7 +30,8 @@ export class IncidentsService {
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
     private readonly dataSource: DataSource,
-        private readonly fileUploadService: IncidentFileUploadService,
+    private readonly fileUploadService: IncidentFileUploadService,
+    private readonly fcmService: FcmService,
   ) {}
 
   async create(
@@ -62,7 +64,18 @@ export class IncidentsService {
       parentNotified: false,
     });
 
-    return this.incidentsRepository.save(incident);
+    const savedIncident = await this.incidentsRepository.save(incident);
+
+    // Send push notification to parents of the child
+    const childName = `${child.firstName} ${child.lastName}`;
+    this.fcmService.notifyChildParents(
+      childId,
+      '⚠️ Incidente reportado',
+      `Se ha registrado un incidente para ${childName}: ${title}`,
+      { type: 'incident', incidentId: String(savedIncident.id) },
+    );
+
+    return savedIncident;
   }
 
   async findAll(

@@ -9,6 +9,7 @@ import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { FileUploadService } from './services/file-upload.service';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
+import { FcmService } from 'src/api/notifications/fcm.service';
 
 @Injectable()
 export class ActivityPhotosService {
@@ -17,6 +18,7 @@ export class ActivityPhotosService {
     private readonly activityPhotosRepository: Repository<ActivityPhotosEntity>,
     private readonly fileUploadService: FileUploadService,
     private readonly parentFilterService: ParentFilterService,
+    private readonly fcmService: FcmService,
   ) {}
 
   async create(
@@ -41,7 +43,16 @@ export class ActivityPhotosService {
       uploadedBy,
     });
 
-    return await this.activityPhotosRepository.save(photo);
+    const saved = await this.activityPhotosRepository.save(photo);
+
+    this.fcmService.notifyChildParents(
+      createActivityPhotoDto.childId,
+      '📸 Nueva foto de actividad',
+      `Se ha subido una nueva foto de actividad para tu hijo/a`,
+      { type: 'photo', photoId: String(saved.id) },
+    );
+
+    return saved;
   }
 
   async findAll(

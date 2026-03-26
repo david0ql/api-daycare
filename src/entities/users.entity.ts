@@ -64,6 +64,9 @@ export class UsersEntity {
   @Column("timestamp", { name: "last_login", nullable: true })
   lastLogin: Date | null;
 
+  @Column("varchar", { name: "fcm_token", nullable: true, length: 500 })
+  fcmToken: string | null;
+
   @Column("timestamp", {
     name: "created_at",
     nullable: true,

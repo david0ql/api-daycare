@@ -10,6 +10,7 @@ import { PageOptionsDto } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
+import { FcmService } from 'src/api/notifications/fcm.service';
 
 @Injectable()
 export class DailyActivitiesService {
@@ -17,6 +18,7 @@ export class DailyActivitiesService {
     @InjectRepository(DailyActivitiesEntity)
     private readonly dailyActivitiesRepository: Repository<DailyActivitiesEntity>,
     private readonly parentFilterService: ParentFilterService,
+    private readonly fcmService: FcmService,
   ) {}
 
   async create(createDailyActivityDto: CreateDailyActivityDto, createdBy: number) {
@@ -42,7 +44,16 @@ export class DailyActivitiesService {
       createdBy,
     });
 
-    return await this.dailyActivitiesRepository.save(activity);
+    const saved = await this.dailyActivitiesRepository.save(activity);
+
+    this.fcmService.notifyChildParents(
+      childId,
+      '📋 Actividad registrada',
+      `Se ha registrado una nueva actividad diaria para tu hijo/a`,
+      { type: 'activity', activityId: String(saved.id) },
+    );
+
+    return saved;
   }
 
   async createBulk(
@@ -85,7 +96,18 @@ export class DailyActivitiesService {
       }),
     );
 
-    return await this.dailyActivitiesRepository.save(entities);
+    const saved = await this.dailyActivitiesRepository.save(entities);
+
+    if (saved.length > 0) {
+      this.fcmService.notifyChildParents(
+        childId,
+        '📋 Actividades registradas',
+        `Se han registrado ${saved.length} actividades diarias para tu hijo/a`,
+        { type: 'activity' },
+      );
+    }
+
+    return saved;
   }
 
   async updateBulk(

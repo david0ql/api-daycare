@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Put,
   Body,
   UseGuards,
   Get,
@@ -17,6 +18,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { UsersEntity } from 'src/entities/users.entity';
@@ -79,11 +81,21 @@ export class AuthController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout user (client-side token removal)' })
-  @ApiResponse({
-    status: 200,
-    description: 'User successfully logged out',
-  })
+  @ApiResponse({ status: 200, description: 'User successfully logged out' })
   async logout(): Promise<{ message: string }> {
     return { message: 'Successfully logged out' };
+  }
+
+  @Put('fcm-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update FCM push notification token' })
+  @ApiResponse({ status: 200, description: 'FCM token updated' })
+  async updateFcmToken(
+    @CurrentUser() user: UsersEntity,
+    @Body() dto: UpdateFcmTokenDto,
+  ): Promise<{ message: string }> {
+    return this.authService.updateFcmToken(user.id, dto);
   }
 }
