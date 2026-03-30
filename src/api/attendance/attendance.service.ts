@@ -223,7 +223,7 @@ export class AttendanceService {
     // Update attendance with check-out
     attendance.checkOutTime = new Date();
     attendance.pickedUpBy = pickedUpBy;
-    attendance.checkOutNotes = notes;
+    attendance.checkOutNotes = notes || null;
     attendance.updatedBy = updatedBy;
 
     return this.attendanceRepository.save(attendance);
