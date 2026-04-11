@@ -297,7 +297,7 @@ export class AttendanceService {
   }
 
   async checkIn(checkInDto: CheckInDto, createdBy: number): Promise<DailyAttendanceEntity> {
-    const { childId, deliveredBy, checkInNotes } = checkInDto;
+    const { childId, deliveredBy, notes } = checkInDto;
     const attendanceDate = new Date().toISOString().split('T')[0];
 
     // Check if attendance already exists for today
@@ -313,7 +313,7 @@ export class AttendanceService {
       // Update existing attendance with check-in
       existingAttendance.checkInTime = new Date();
       existingAttendance.deliveredBy = deliveredBy || null;
-      existingAttendance.checkInNotes = checkInNotes || null;
+      existingAttendance.checkInNotes = notes || null;
       existingAttendance.updatedBy = createdBy;
 
       return this.attendanceRepository.save(existingAttendance);
@@ -325,7 +325,7 @@ export class AttendanceService {
       attendanceDate,
       checkInTime: new Date().toISOString(),
       deliveredBy,
-      checkInNotes,
+      checkInNotes: notes,
     }, createdBy);
   }
 

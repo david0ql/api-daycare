@@ -26,5 +26,5 @@ export class CheckInDto {
   })
   @IsString()
   @IsOptional()
-  checkInNotes?: string;
+  notes?: string;
 }
