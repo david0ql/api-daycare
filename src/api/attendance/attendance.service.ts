@@ -8,7 +8,7 @@ import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
-import { PageOptionsDto } from 'src/dto/page-options.dto';
+import { PageOptionsDto, Order } from 'src/dto/page-options.dto';
 import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { SearchDto } from 'src/dto/search.dto';
@@ -86,6 +86,13 @@ export class AttendanceService {
     currentUserId?: number,
     currentUserRole?: string,
   ): Promise<PageDto<DailyAttendanceEntity>> {
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
     const queryBuilder = this.attendanceRepository
       .createQueryBuilder('attendance')
       .leftJoinAndSelect('attendance.child', 'child')
@@ -94,22 +101,155 @@ export class AttendanceService {
       .leftJoinAndSelect('attendance.createdBy2', 'createdBy')
       .orderBy('attendance.attendanceDate', pageOptionsDto.order);
 
-    // If user is parent, only show attendance for their children
+    let parentChildIds: number[] = [];
     if (currentUserRole === 'parent' && currentUserId) {
-      const childIds = await this.parentFilterService.getParentChildIds(currentUserId);
-      if (childIds.length === 0) {
+      parentChildIds = await this.parentFilterService.getParentChildIds(currentUserId);
+      if (parentChildIds.length === 0) {
         return new PageDto([], new PageMetaDto({ totalCount: 0, pageOptionsDto }));
       }
-      queryBuilder.andWhere('attendance.childId IN (:...childIds)', { childIds });
+      queryBuilder.andWhere('attendance.childId IN (:...childIds)', { childIds: parentChildIds });
     }
 
-    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
+    // Get all active children to check for absences today
+    const childrenQuery = this.childrenRepository.createQueryBuilder('child')
+      .where('child.isActive = :isActive', { isActive: 1 });
+    
+    if (parentChildIds.length > 0) {
+      childrenQuery.andWhere('child.id IN (:...childIds)', { childIds: parentChildIds });
+    }
+    
+    const activeChildren = await childrenQuery.getMany();
 
-    const [attendances, totalCount] = await queryBuilder.getManyAndCount();
+    // Get IDs of children who have already checked in today
+    const presentTodayChildIdsRaw = await this.attendanceRepository.createQueryBuilder('attendance')
+      .select('attendance.childId', 'childId')
+      .where('attendance.attendanceDate = :today', { today })
+      .getRawMany();
+    
+    const presentTodayChildIds = new Set(presentTodayChildIdsRaw.map(r => r.childId));
+
+    // Create virtual records for absent children
+    const virtualRecords: DailyAttendanceEntity[] = activeChildren
+      .filter(child => !presentTodayChildIds.has(child.id))
+      .map(child => {
+        const virtual = new DailyAttendanceEntity();
+        // Since id is number, we use a recognizable negative sequence or bypass if possible
+        // but for JSON output, we can use a string if we are careful.
+        // Let's use a very large negative number to avoid conflicts with real IDs
+        (virtual as any).id = `virtual-absent-${child.id}`; 
+        virtual.childId = child.id;
+        virtual.child = child;
+        virtual.attendanceDate = today;
+        (virtual as any).isVirtual = true;
+        (virtual as any).isPresent = false;
+        virtual.checkInTime = null;
+        virtual.checkOutTime = null;
+        return virtual;
+      });
+
+    // Sort virtual records by child name
+    virtualRecords.sort((a, b) => {
+      const nameA = `${a.child.firstName} ${a.child.lastName}`.toLowerCase();
+      const nameB = `${b.child.firstName} ${b.child.lastName}`.toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    // Get total count of all real records
+    const realTotalCount = await queryBuilder.getCount();
+    
+    // Get real records for TODAY specifically to merge with virtual ones
+    const realToday = await this.attendanceRepository.createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.child', 'child')
+      .leftJoinAndSelect('attendance.deliveredBy2', 'deliveredBy')
+      .leftJoinAndSelect('attendance.pickedUpBy2', 'pickedUpBy')
+      .where('attendance.attendanceDate = :today', { today })
+      .andWhere(parentChildIds.length > 0 ? 'attendance.childId IN (:...childIds)' : '1=1', { childIds: parentChildIds })
+      .orderBy('child.firstName', 'ASC')
+      .addOrderBy('child.lastName', 'ASC')
+      .getMany();
+
+    const virtualTotalCount = virtualRecords.length;
+    const realTodayCount = realToday.length;
+    const combinedTodayCount = virtualTotalCount + realTodayCount;
+    const totalCount = realTotalCount + virtualTotalCount;
+
+    const skip = pageOptionsDto.skip || 0;
+    const take = pageOptionsDto.take || 10;
+    let result: DailyAttendanceEntity[] = [];
+
+    if (pageOptionsDto.order === Order.DESC) {
+      // Latest first: Today (Real + Virtual) -> History (Real < Today)
+      if (skip < combinedTodayCount) {
+        // Current page includes or starts with Today's records
+        const combinedToday = [...virtualRecords, ...realToday].sort((a, b) => {
+          const nameA = `${a.child.firstName} ${a.child.lastName}`.toLowerCase();
+          const nameB = `${b.child.firstName} ${b.child.lastName}`.toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+
+        result = combinedToday.slice(skip, skip + take);
+
+        if (result.length < take) {
+          // Fill remaining with history
+          const remaining = take - result.length;
+          const history = await queryBuilder
+            .where('attendance.attendanceDate < :today', { today })
+            .andWhere(parentChildIds.length > 0 ? 'attendance.childId IN (:...childIds)' : '1=1', { childIds: parentChildIds })
+            .orderBy('attendance.attendanceDate', 'DESC')
+            .addOrderBy('child.firstName', 'ASC')
+            .addOrderBy('child.lastName', 'ASC')
+            .skip(0)
+            .take(remaining)
+            .getMany();
+          result = [...result, ...history];
+        }
+      } else {
+        // Current page is purely history
+        const historySkip = skip - combinedTodayCount;
+        result = await queryBuilder
+          .where('attendance.attendanceDate < :today', { today })
+          .andWhere(parentChildIds.length > 0 ? 'attendance.childId IN (:...childIds)' : '1=1', { childIds: parentChildIds })
+          .orderBy('attendance.attendanceDate', 'DESC')
+          .addOrderBy('child.firstName', 'ASC')
+          .addOrderBy('child.lastName', 'ASC')
+          .skip(historySkip)
+          .take(take)
+          .getMany();
+      }
+    } else {
+      // ASC Order: History (Real < Today) -> Today (Real + Virtual)
+      const historyTotalCount = realTotalCount - realTodayCount;
+      if (skip < historyTotalCount) {
+        result = await queryBuilder
+          .where('attendance.attendanceDate < :today', { today })
+          .andWhere(parentChildIds.length > 0 ? 'attendance.childId IN (:...childIds)' : '1=1', { childIds: parentChildIds })
+          .orderBy('attendance.attendanceDate', 'ASC')
+          .addOrderBy('child.firstName', 'ASC')
+          .addOrderBy('child.lastName', 'ASC')
+          .skip(skip)
+          .take(take)
+          .getMany();
+        
+        if (result.length < take) {
+          const combinedToday = [...virtualRecords, ...realToday].sort((a, b) => {
+            const nameA = `${a.child.firstName} ${a.child.lastName}`.toLowerCase();
+            const nameB = `${b.child.firstName} ${b.child.lastName}`.toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+          result = [...result, ...combinedToday.slice(0, take - result.length)];
+        }
+      } else {
+        const combinedToday = [...virtualRecords, ...realToday].sort((a, b) => {
+          const nameA = `${a.child.firstName} ${a.child.lastName}`.toLowerCase();
+          const nameB = `${b.child.firstName} ${b.child.lastName}`.toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        result = combinedToday.slice(skip - historyTotalCount, skip - historyTotalCount + take);
+      }
+    }
 
     const pageMetaDto = new PageMetaDto({ totalCount, pageOptionsDto });
-
-    return new PageDto(attendances, pageMetaDto);
+    return new PageDto(result, pageMetaDto);
   }
 
   async findOne(
