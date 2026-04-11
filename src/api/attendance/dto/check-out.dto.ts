@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CheckOutDto {
   @ApiProperty({
@@ -19,10 +19,11 @@ export class CheckOutDto {
   pickedUpBy: number;
 
   @ApiProperty({
-    description: 'Check-out notes (required)',
+    description: 'Check-out notes',
     example: 'Child had a great day, played well with others',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  notes: string;
+  @IsOptional()
+  notes?: string;
 }
