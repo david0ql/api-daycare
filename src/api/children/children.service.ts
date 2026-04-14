@@ -17,6 +17,7 @@ import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { SearchDto } from 'src/dto/search.dto';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
 import { FileUploadService } from '../attendance/services/file-upload.service';
+import { DateHelper } from '../shared/utils/date-helper';
 
 @Injectable()
 export class ChildrenService {
@@ -35,6 +36,7 @@ export class ChildrenService {
     private readonly usersRepository: Repository<UsersEntity>,
     private readonly parentFilterService: ParentFilterService,
     private readonly fileUploadService: FileUploadService,
+    private readonly dateHelper: DateHelper,
   ) {}
 
   async create(createChildDto: CreateChildDto): Promise<ChildrenEntity> {
@@ -268,15 +270,15 @@ export class ChildrenService {
   }
 
   async findByAgeRange(minAge: number, maxAge: number, pageOptionsDto: PageOptionsDto): Promise<PageDto<ChildrenEntity>> {
-    const currentDate = new Date();
+    const currentDate = this.dateHelper.getOrlandoDate();
     const minBirthDate = new Date(currentDate.getFullYear() - maxAge, currentDate.getMonth(), currentDate.getDate());
     const maxBirthDate = new Date(currentDate.getFullYear() - minAge, currentDate.getMonth(), currentDate.getDate());
 
     const queryBuilder = this.childrenRepository
       .createQueryBuilder('child')
       .where('child.birthDate BETWEEN :minBirthDate AND :maxBirthDate', {
-        minBirthDate: minBirthDate.toISOString().split('T')[0],
-        maxBirthDate: maxBirthDate.toISOString().split('T')[0],
+        minBirthDate: this.dateHelper.formatToLocalYYYYMMDD(minBirthDate),
+        maxBirthDate: this.dateHelper.formatToLocalYYYYMMDD(maxBirthDate),
       })
       .orderBy('child.createdAt', pageOptionsDto.order)
       .skip(pageOptionsDto.skip)
@@ -319,7 +321,7 @@ export class ChildrenService {
 
   calculateAge(birthDate: string): { years: number; months: number } {
     const birth = new Date(birthDate);
-    const today = new Date();
+    const today = this.dateHelper.getOrlandoDate();
     
     let years = today.getFullYear() - birth.getFullYear();
     let months = today.getMonth() - birth.getMonth();
