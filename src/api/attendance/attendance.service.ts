@@ -13,6 +13,7 @@ import { PageDto } from 'src/dto/page.dto';
 import { PageMetaDto } from 'src/dto/page-meta.dto';
 import { SearchDto } from 'src/dto/search.dto';
 import { ParentFilterService } from '../shared/services/parent-filter.service';
+import { DateHelper } from '../shared/utils/date-helper';
 
 @Injectable()
 export class AttendanceService {
@@ -298,7 +299,7 @@ export class AttendanceService {
 
   async checkIn(checkInDto: CheckInDto, createdBy: number): Promise<DailyAttendanceEntity> {
     const { childId, deliveredBy, notes } = checkInDto;
-    const attendanceDate = new Date().toISOString().split('T')[0];
+    const attendanceDate = DateHelper.getLocalDateString();
 
     // Check if attendance already exists for today
     const existingAttendance = await this.attendanceRepository.findOne({
@@ -331,7 +332,7 @@ export class AttendanceService {
 
   async checkOut(checkOutDto: CheckOutDto, updatedBy: number): Promise<DailyAttendanceEntity> {
     const { childId, pickedUpBy, notes } = checkOutDto;
-    const attendanceDate = new Date().toISOString().split('T')[0];
+    const attendanceDate = DateHelper.getLocalDateString();
 
     // Find today's attendance
     const attendance = await this.attendanceRepository.findOne({
@@ -458,7 +459,7 @@ export class AttendanceService {
     currentUserId?: number,
     currentUserRole?: string,
   ): Promise<DailyAttendanceEntity[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = DateHelper.getLocalDateString();
 
     const queryBuilder = this.attendanceRepository
       .createQueryBuilder('attendance')
@@ -499,7 +500,7 @@ export class AttendanceService {
       }
     }
 
-    const attendanceDate = date || new Date().toISOString().split('T')[0];
+    const attendanceDate = date || DateHelper.getLocalDateString();
 
     const attendance = await this.attendanceRepository.findOne({
       where: { childId, attendanceDate },

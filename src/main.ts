@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import envVars from './config/env';
 
 async function bootstrap() {
+  process.env.TZ = 'America/New_York';
   const app = await NestFactory.create(AppModule);
 
   app.useGlobalPipes(new ValidationPipe({ forbidNonWhitelisted: true, whitelist: true, transform: true }));
