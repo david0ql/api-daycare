@@ -17,10 +17,10 @@ export class CreateIncidentDto {
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({ description: 'Detailed incident description' })
+  @ApiProperty({ description: 'Detailed incident description', required: false })
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  @IsOptional()
+  description?: string;
 
   @ApiProperty({ 
     description: 'Date and time when the incident occurred',

@@ -56,7 +56,7 @@ export class IncidentsService {
       childId,
       incidentTypeId,
       title,
-      description,
+      description: description || '',
       incidentDate: new Date(incidentDate),
       location: location || null,
       actionTaken: actionTaken || null,
