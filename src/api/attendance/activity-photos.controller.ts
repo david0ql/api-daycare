@@ -55,10 +55,6 @@ export class ActivityPhotosController {
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() currentUser: UsersEntity,
   ) {
-    if (!file) {
-      throw new BadRequestException('No file uploaded');
-    }
-    
     return this.activityPhotosService.create(createActivityPhotoDto, file, currentUser.id);
   }
 

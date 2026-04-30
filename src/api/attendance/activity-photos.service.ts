@@ -26,15 +26,18 @@ export class ActivityPhotosService {
     file: Express.Multer.File, 
     uploadedBy: number
   ) {
-    if (!file) {
-      throw new BadRequestException('No file provided');
-    }
+    let filename = 'no-photo.jpg';
+    let filePath = '/uploads/activity-photos/no-photo.jpg';
 
-    const { filename, filePath } = await this.fileUploadService.saveFile(
-      file, 
-      'activity-photos',
-      'activity'
-    );
+    if (file) {
+      const savedFile = await this.fileUploadService.saveFile(
+        file, 
+        'activity-photos',
+        'activity'
+      );
+      filename = savedFile.filename;
+      filePath = savedFile.filePath;
+    }
 
     const photo = this.activityPhotosRepository.create({
       ...createActivityPhotoDto,
